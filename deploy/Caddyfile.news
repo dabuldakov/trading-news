@@ -1,0 +1,20 @@
+# One-time: in the main Caddyfile add:
+#   import /etc/caddy/sites/*.caddy
+# and mount this file as /etc/caddy/sites/news.caddy.
+# Then: docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+#
+# The main caddy service needs host-gateway to reach 127.0.0.1:8001:
+#   extra_hosts: ["host.docker.internal:host-gateway"]
+#
+# Replace the password hash with:
+#   docker compose exec caddy caddy hash-password --plaintext 'your-password'
+
+news.traiding.space {
+    encode gzip
+
+    basic_auth {
+        dabuldakov $2a$14$REPLACE_WITH_HASH
+    }
+
+    reverse_proxy host.docker.internal:8001
+}

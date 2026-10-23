@@ -1,0 +1,58 @@
+"""Free Russian financial/economy sources. RSS first; GDELT/Telegram later."""
+
+SOURCES: list[dict] = [
+    {
+        "name": "cbr",
+        "kind": "rss",
+        "url": "https://www.cbr.ru/rss/RssPress",
+        "credibility": 0.9,
+    },
+    {
+        "name": "rbc",
+        "kind": "rss",
+        "url": "https://rssexport.rbc.ru/rbcnews/news/30/full.rss",
+        "credibility": 0.7,
+    },
+    {
+        "name": "vedomosti",
+        "kind": "rss",
+        "url": "https://www.vedomosti.ru/rss/news",
+        "credibility": 0.8,
+    },
+    {
+        "name": "kommersant",
+        "kind": "rss",
+        "url": "https://www.kommersant.ru/RSS/news.xml",
+        "credibility": 0.8,
+    },
+    {
+        "name": "tass",
+        "kind": "rss",
+        "url": "https://tass.ru/rss/v2.xml",
+        "credibility": 0.8,
+    },
+    {
+        "name": "interfax",
+        "kind": "rss",
+        "url": "https://www.interfax.ru/rss.asp",
+        "credibility": 0.85,
+    },
+    {
+        "name": "prime",
+        "kind": "rss",
+        "url": "https://1prime.ru/export/rss.xml",
+        "credibility": 0.6,
+    },
+    {
+        "name": "finam",
+        "kind": "rss",
+        "url": "https://www.finam.ru/analysis/conews/rsspoint/",
+        "credibility": 0.5,
+    },
+    {
+        "name": "smartlab",
+        "kind": "rss",
+        "url": "https://smart-lab.ru/rss/",
+        "credibility": 0.4,
+    },
+]

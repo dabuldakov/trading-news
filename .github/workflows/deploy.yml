@@ -1,0 +1,33 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: news-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: deploy to VPS (/opt/news)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            mkdir -p /opt/news
+            cd /opt/news
+            if [ ! -d .git ]; then
+              git clone git@github.com:dabuldakov/trading-news.git .
+            fi
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose -p news up -d --build --remove-orphans
+            sleep 8
+            curl -fsS http://127.0.0.1:8001/health
