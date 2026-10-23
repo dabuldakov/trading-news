@@ -17,11 +17,13 @@ def _seed_company(conn, name: str = "ПАО Сбербанк") -> int:
             (ticker, ticker, company),
         )
     conn.execute(
-        "INSERT INTO aliases (company_id, alias, kind) VALUES (%s, 'Сбербанк', 'short_name')",
+        "INSERT INTO aliases (company_id, alias, kind) "
+        "VALUES (%s, 'Сбербанк', 'short_name')",
         (company,),
     )
     conn.execute(
-        "INSERT INTO aliases (company_id, alias, kind) VALUES (%s, 'ПАО Сбербанк', 'issuer')",
+        "INSERT INTO aliases (company_id, alias, kind) "
+        "VALUES (%s, 'ПАО Сбербанк', 'issuer')",
         (company,),
     )
     return company
@@ -87,11 +89,13 @@ def test_link_ignores_generic_alias() -> None:
             "INSERT INTO companies (name) VALUES ('Банк') RETURNING id"
         ).fetchone()[0]
         conn.execute(
-            "INSERT INTO instruments (ticker, secid, company_id) VALUES ('BANK', 'BANK', %s)",
+            "INSERT INTO instruments (ticker, secid, company_id) "
+            "VALUES ('BANK', 'BANK', %s)",
             (company,),
         )
         conn.execute(
-            "INSERT INTO aliases (company_id, alias, kind) VALUES (%s, 'банк', 'short_name')",
+            "INSERT INTO aliases (company_id, alias, kind) "
+            "VALUES (%s, 'банк', 'short_name')",
             (company,),
         )
         article_id = _article(conn, "Банк России сохранил ставку")
