@@ -6,6 +6,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from .config import settings
 from .news.ingest import ingest_all
+from .news.telegram import ingest_telegram
 from .nlp.classify import classify_pending
 from .reference.sync import sync_reference
 
@@ -27,6 +28,13 @@ def build_scheduler() -> BlockingScheduler:
         ingest_all,
         IntervalTrigger(seconds=settings.news_interval_sec, timezone=settings.tz),
         id="news",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        ingest_telegram,
+        IntervalTrigger(minutes=10, timezone=settings.tz),
+        id="telegram",
         max_instances=1,
         coalesce=True,
     )
