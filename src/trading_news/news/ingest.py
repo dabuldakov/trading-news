@@ -9,6 +9,7 @@ import httpx
 from dateutil import parser as date_parser
 
 from ..db import pool
+from .link import link_pending
 from .sources import SOURCES
 
 logger = logging.getLogger(__name__)
@@ -124,7 +125,8 @@ def ingest_all() -> dict:
                 logger.info("news %s: +%d", source["name"], count)
             except Exception as exc:  # noqa: BLE001 - one feed must not break the loop
                 logger.warning("news %s failed: %s", source["name"], exc)
-    return {"inserted": total}
+    linked = link_pending()
+    return {"inserted": total, "linked": linked}
 
 
 if __name__ == "__main__":

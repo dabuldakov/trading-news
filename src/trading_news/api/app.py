@@ -82,3 +82,58 @@ def trigger_sync() -> dict:
     from ..reference.sync import sync_reference
 
     return sync_reference()
+
+
+@app.get("/internal/news", dependencies=[Depends(require_key)])
+def news(since: str | None = None, limit: int = 50) -> dict:
+    with pool().connection() as conn:
+        rows = _rows(
+            conn,
+            """
+            SELECT a.id, a.published_at, a.title, a.url,
+                   s.name AS source,
+                   COALESCE(
+                       json_agg(
+                           json_build_object(
+                               'ticker', t.ticker,
+                               'confidence', t.confidence
+                           )
+                       ) FILTER (WHERE t.ticker IS NOT NULL),
+                       '[]'::json
+                   ) AS tickers
+            FROM news_articles a
+            LEFT JOIN news_sources s ON s.id = a.source_id
+            LEFT JOIN news_tickers t ON t.article_id = a.id
+            WHERE (%s::timestamptz IS NULL OR a.published_at >= %s::timestamptz)
+            GROUP BY a.id, s.name
+            ORDER BY a.published_at DESC
+            LIMIT %s
+            """,
+            (since, since, limit),
+        )
+    return {"news": rows}
+
+
+@app.get("/internal/signals", dependencies=[Depends(require_key)])
+def signals(since: str | None = None, limit: int = 100) -> dict:
+    with pool().connection() as conn:
+        rows = _rows(
+            conn,
+            """
+            SELECT id, article_id, ticker, side, expected_edge, confidence,
+                   horizon, marker_key, created_at
+            FROM signals
+            WHERE (%s::timestamptz IS NULL OR created_at >= %s::timestamptz)
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (since, since, limit),
+        )
+    return {"signals": rows}
+
+
+@app.post("/internal/link", dependencies=[Depends(require_key)])
+def run_link(limit: int = 500) -> dict:
+    from ..news.link import link_pending
+
+    return {"linked": link_pending(limit=limit)}
