@@ -48,7 +48,7 @@ make test
 
 ## Деплой
 
-GitHub secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
+GitHub secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PATH`.
 
 На сервере один раз:
 
@@ -57,7 +57,7 @@ mkdir -p /opt/news
 # положить /opt/news/.env (не в git)
 ```
 
-Пуш в `main` → CI → deploy workflow (`/opt/news`, `docker compose -p news up -d --build`).
+Пуш в `main` → CI → deploy workflow (`$DEPLOY_PATH`, `docker compose -p news up -d --build`). При первом деплое workflow сам создаёт `.env` со случайными `POSTGRES_PASSWORD` и `SERVICE_KEY` (посмотреть: `ssh ... 'cat /opt/news/.env'`).
 
 ## Дорожная карта
 

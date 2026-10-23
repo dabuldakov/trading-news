@@ -13,21 +13,42 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: deploy to VPS (/opt/news)
+      - name: deploy to VPS
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -euo pipefail
-            mkdir -p /opt/news
-            cd /opt/news
+            APP_DIR="${{ secrets.DEPLOY_PATH }}"
+            mkdir -p "$APP_DIR"
+            cd "$APP_DIR"
             if [ ! -d .git ]; then
               git clone git@github.com:dabuldakov/trading-news.git .
             fi
             git fetch origin main
             git reset --hard origin/main
+
+            if [ ! -f .env ]; then
+              DB_PASS="$(openssl rand -hex 16)"
+              SERVICE_KEY="$(openssl rand -hex 32)"
+              cat > .env <<ENV
+POSTGRES_DB=news
+POSTGRES_USER=news
+POSTGRES_PASSWORD=$DB_PASS
+DATABASE_URL=postgresql://news:$DB_PASS@postgres:5432/news
+SERVICE_KEY=$SERVICE_KEY
+NEWS_INTERVAL_SEC=3600
+REFERENCE_CRON_HOUR=7
+REFERENCE_CRON_MINUTE=30
+TZ=Europe/Moscow
+ENV
+              chmod 600 .env
+              echo "created /opt/news/.env (SERVICE_KEY is inside)"
+            fi
+
             docker compose -p news up -d --build --remove-orphans
-            sleep 8
+            sleep 10
             curl -fsS http://127.0.0.1:8001/health
+            echo "news deployed to $APP_DIR"
