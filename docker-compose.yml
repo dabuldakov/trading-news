@@ -27,7 +27,7 @@ services:
     build: .
     env_file: .env
     ports:
-      - "127.0.0.1:8001:8000"
+      - "172.17.0.1:8001:8000"
     depends_on:
       postgres:
         condition: service_healthy
