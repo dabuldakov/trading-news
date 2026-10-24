@@ -65,6 +65,8 @@ def link_pending(limit: int = 5000, min_similarity: float = 0.55) -> int:
             for _company_id, alias, ticker, sim, exact in rows:
                 if alias.strip().lower() in GENERIC:
                     continue
+                if alias.upper().startswith("RU000") and len(alias) == 12:
+                    continue  # ISIN-алиасы дают ложные привязки
                 if not exact and float(sim) < min_similarity:
                     continue
                 confidence = 0.95 if exact else min(0.9, float(sim))
