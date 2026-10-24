@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from ..db import pool
-from .ingest import article_hash, parse_feed
+from .ingest import parse_feed
 from .sources import SOURCES
 
 logger = logging.getLogger(__name__)
