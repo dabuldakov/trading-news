@@ -132,3 +132,49 @@ def classify_pending(limit: int = 100) -> int:
             )
         conn.commit()
     return len(rows)
+
+
+def reclassify_all(limit: int = 100000) -> int:
+    """Пересчитать sentiment/event_type по текущим правилам для всех статей."""
+    with pool().connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT n.article_id, a.title, COALESCE(a.summary, '')
+            FROM news_analysis n
+            JOIN news_articles a ON a.id = n.article_id
+            LIMIT %s
+            """,
+            (limit,),
+        ).fetchall()
+        for article_id, title, summary in rows:
+            result = classify({"title": title, "summary": summary})
+            conn.execute(
+                """
+                UPDATE news_analysis
+                SET sentiment = %s, score = %s, event_type = %s,
+                    materiality = %s, model = %s
+                WHERE article_id = %s
+                """,
+                (
+                    result["sentiment"],
+                    result["score"],
+                    result["event_type"],
+                    result["materiality"],
+                    result["model"],
+                    article_id,
+                ),
+            )
+        conn.commit()
+    return len(rows)
+
+
+if __name__ == "__main__":
+    import argparse
+    import logging
+
+    logging.basicConfig(level=logging.INFO)
+    parser = argparse.ArgumentParser(description="reclassify news")
+    parser.add_argument("--reclassify", action="store_true")
+    args = parser.parse_args()
+    if args.reclassify:
+        print({"reclassified": reclassify_all()})
