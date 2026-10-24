@@ -97,7 +97,8 @@ def classify_pending(limit: int = 100) -> int:
             SELECT a.id, a.title, COALESCE(a.summary, '')
             FROM news_articles a
             LEFT JOIN news_analysis n ON n.article_id = a.id
-            WHERE a.status IN ('new', 'linked') AND n.article_id IS NULL
+            WHERE a.status IN ('new', 'linked', 'skipped')
+              AND n.article_id IS NULL
             ORDER BY a.published_at
             LIMIT %s
             """,
