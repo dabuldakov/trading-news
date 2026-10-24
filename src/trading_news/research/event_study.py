@@ -71,8 +71,11 @@ def _reaction(bars: list[dict], market: list[dict], published_at: datetime):
         published_at = published_at.astimezone(ZoneInfo("Europe/Moscow")).replace(
             tzinfo=None
         )
-    idx = next((i for i, bar in enumerate(bars) if bar["begin"] >= published_at), None)
-    if idx is None or idx < 1:
+    idx = next(
+        (i for i, bar in enumerate(bars) if bar["begin"] >= published_at),
+        len(bars) - 1,
+    )
+    if idx < 1:
         return None
     base = bars[idx - 1]["close"]
     if base <= 0:
