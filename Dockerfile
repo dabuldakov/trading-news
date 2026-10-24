@@ -6,6 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# IPv4-first: у контейнера нет IPv6-маршрута, а t.me отдаёт AAAA.
+RUN echo "precedence ::ffff:0:0/96 100" > /etc/gai.conf
+
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install .
