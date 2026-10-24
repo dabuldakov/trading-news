@@ -55,4 +55,46 @@ SOURCES: list[dict] = [
         "url": "https://smart-lab.ru/rss/",
         "credibility": 0.4,
     },
+    {
+        "name": "ria",
+        "kind": "rss",
+        "url": "https://ria.ru/export/rss2/archive/index.xml",
+        "credibility": 0.75,
+    },
+    {
+        "name": "lenta",
+        "kind": "rss",
+        "url": "https://lenta.ru/rss/news",
+        "credibility": 0.6,
+    },
+    {
+        "name": "banki",
+        "kind": "rss",
+        "url": "https://www.banki.ru/xml/news.rss",
+        "credibility": 0.6,
+    },
+    {
+        "name": "frankmedia",
+        "kind": "rss",
+        "url": "https://frankmedia.ru/feed",
+        "credibility": 0.7,
+    },
+    {
+        "name": "bcsexpress",
+        "kind": "rss",
+        "url": "https://bcs-express.ru/rss",
+        "credibility": 0.6,
+    },
+    {
+        "name": "investing",
+        "kind": "rss",
+        "url": "https://ru.investing.com/rss/news_25.rss",
+        "credibility": 0.5,
+    },
+    {
+        "name": "moex_news",
+        "kind": "rss",
+        "url": "https://www.moex.com/export/news.aspx",
+        "credibility": 0.9,
+    },
 ]
