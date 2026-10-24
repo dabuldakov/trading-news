@@ -55,10 +55,14 @@ def link_pending(limit: int = 5000, min_similarity: float = 0.55) -> int:
                 JOIN instruments i
                   ON i.company_id = a.company_id AND i.status = 'active'
                 WHERE length(a.alias) >= 4
-                ORDER BY sim DESC
-                LIMIT 25
+                  AND (
+                    (%s ILIKE '%%' || a.alias || '%%')
+                    OR similarity(lower(a.alias), lower(%s)) >= %s
+                  )
+                ORDER BY exact DESC, sim DESC
+                LIMIT 100
                 """,
-                (text, text),
+                (text, text, text, text, min_similarity),
             ).fetchall()
 
             best: dict[str, float] = {}

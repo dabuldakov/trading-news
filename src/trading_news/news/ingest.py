@@ -55,6 +55,24 @@ def parse_feed(data: bytes) -> list[dict]:
     return out
 
 
+def is_relevant(conn, text: str) -> bool:
+    """Есть ли в тексте упоминание компании (алиас инструмента)."""
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM aliases a
+        JOIN instruments i
+          ON i.company_id = a.company_id AND i.status = 'active'
+        WHERE length(a.alias) >= 4
+          AND lower(%s) LIKE '%%' || lower(a.alias) || '%%'
+          AND a.alias !~* '^(ПАО|ОАО|ЗАО|АО)$'
+        LIMIT 1
+        """,
+        (text,),
+    ).fetchone()
+    return row is not None
+
+
 def _source_id(conn, source: dict) -> int:
     row = conn.execute(
         """
@@ -89,9 +107,13 @@ def ingest_source(source: dict, client: httpx.Client | None = None) -> int:
             client.close()
 
     inserted = 0
+    irrelevant = 0
     with pool().connection() as conn:
         source_id = _source_id(conn, source)
         for item in items:
+            if not is_relevant(conn, f"{item['title']} {item['summary']}"):
+                irrelevant += 1
+                continue
             row = conn.execute(
                 """
                 INSERT INTO news_articles
@@ -112,21 +134,23 @@ def ingest_source(source: dict, client: httpx.Client | None = None) -> int:
             if row:
                 inserted += 1
         conn.commit()
-    return inserted
+    return inserted, irrelevant
 
 
 def ingest_all() -> dict:
     total = 0
+    dropped = 0
     with httpx.Client(timeout=20.0, follow_redirects=True) as client:
         for source in SOURCES:
             try:
-                count = ingest_source(source, client)
+                count, irrelevant = ingest_source(source, client)
                 total += count
-                logger.info("news %s: +%d", source["name"], count)
+                dropped += irrelevant
+                logger.info("news %s: +%d (skip %d)", source["name"], count, irrelevant)
             except Exception as exc:  # noqa: BLE001 - one feed must not break the loop
                 logger.warning("news %s failed: %s", source["name"], exc)
     linked = link_pending()
-    return {"inserted": total, "linked": linked}
+    return {"inserted": total, "skipped": dropped, "linked": linked}
 
 
 if __name__ == "__main__":
