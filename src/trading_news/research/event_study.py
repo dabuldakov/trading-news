@@ -198,12 +198,12 @@ def build_markers() -> int:
         rows = conn.execute(
             """
             SELECT n.event_type, n.sentiment, s.name AS source,
-                   r.abnormal_ret
+                   COALESCE(r.abnormal_ret, r.ret_1d) AS abnormal_ret
             FROM news_reactions r
             JOIN news_analysis n ON n.article_id = r.article_id
             JOIN news_articles a ON a.id = r.article_id
             LEFT JOIN news_sources s ON s.id = a.source_id
-            WHERE r.abnormal_ret IS NOT NULL
+            WHERE COALESCE(r.abnormal_ret, r.ret_1d) IS NOT NULL
             """
         ).fetchall()
 
