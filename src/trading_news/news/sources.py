@@ -6,6 +6,7 @@ SOURCES: list[dict] = [
         "kind": "rss",
         "url": "https://www.cbr.ru/rss/RssPress",
         "credibility": 0.9,
+        "macro": True,
     },
     {
         "name": "rbc",
