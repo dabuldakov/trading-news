@@ -38,7 +38,7 @@ def link_pending(limit: int = 5000, min_similarity: float = 0.55) -> int:
         articles = conn.execute(
             """
             SELECT id, title, COALESCE(summary, '') FROM news_articles
-            WHERE status = 'new'
+            WHERE status IN ('new', 'skipped')
             ORDER BY published_at
             LIMIT %s
             """,
