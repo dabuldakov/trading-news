@@ -25,7 +25,7 @@ GENERIC = {
 }
 
 
-def link_pending(limit: int = 200, min_similarity: float = 0.55) -> int:
+def link_pending(limit: int = 5000, min_similarity: float = 0.55) -> int:
     """Связать новые статьи с тикерами по алиасам компаний.
 
     Точное вхождение алиаса в заголовок/лид — confidence 0.95; иначе триграммы
