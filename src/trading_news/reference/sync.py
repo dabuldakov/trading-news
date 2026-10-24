@@ -70,7 +70,7 @@ def _upsert_instrument(
             security.currency,
             security.list_level,
             broker.get("short_enabled"),
-            broker.get("broker_available"),
+            True if broker else None,
         ),
     )
 
