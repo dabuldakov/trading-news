@@ -36,7 +36,7 @@ def fetch_dividends(ticker: str, client: httpx.Client | None = None) -> list[dic
     index = {name: i for i, name in enumerate(columns)}
     out: list[dict] = []
     for row in block.get("data") or []:
-        def value(name: str):
+        def value(name: str, row=row, index=index):
             position = index.get(name)
             if position is None or position >= len(row):
                 return None
