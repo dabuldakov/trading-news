@@ -10,7 +10,8 @@ from __future__ import annotations
 import argparse
 import logging
 import math
-from statistics import mean as stat_mean, stdev
+from statistics import mean as stat_mean
+from statistics import stdev
 
 from ..db import pool
 
