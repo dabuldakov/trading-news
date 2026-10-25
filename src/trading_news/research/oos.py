@@ -24,6 +24,7 @@ from .stats import (
     bootstrap_ci,
     event_group,
     marker_key,
+    sentiment_label,
     source_key,
     stats,
 )
@@ -73,6 +74,79 @@ def _group_stats(rows: list[dict], field: str) -> dict[str, dict]:
     for row in rows:
         buckets[row[field]].append(row["pnl"])
     return {key: stats(values) for key, values in buckets.items()}
+
+
+def event_study(
+    *,
+    horizon: int = 1,
+    start: str | None = None,
+    end: str | None = None,
+    require_abnormal: bool = True,
+) -> dict:
+    """Средняя аномальная доходность по (группа события, знак) без торговли."""
+    if horizon not in ABNORMAL:
+        raise ValueError(f"horizon must be one of {sorted(ABNORMAL)}")
+    abnormal = f"r.{ABNORMAL[horizon]}"
+    raw = f"r.{RETURN[horizon]}"
+    expr = abnormal if require_abnormal else f"COALESCE({abnormal}, {raw})"
+    clauses = [f"{expr} IS NOT NULL"]
+    params: list = []
+    if start is not None:
+        clauses.append("a.published_at >= %s")
+        params.append(start)
+    if end is not None:
+        clauses.append("a.published_at < %s")
+        params.append(end)
+    with pool().connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT a.id, n.event_type, n.sentiment, {expr}
+            FROM news_reactions r
+            JOIN news_analysis n ON n.article_id = r.article_id
+            JOIN news_articles a ON a.id = r.article_id
+            WHERE {" AND ".join(clauses)}
+            """,
+            params,
+        ).fetchall()
+    groups: dict[str, list[tuple[float, object]]] = defaultdict(list)
+    for article_id, event_type, sentiment, value in rows:
+        key = f"{event_group(event_type)}|{sentiment_label(sentiment)}"
+        groups[key].append((float(value), article_id))
+    out = {}
+    for key, values in groups.items():
+        item = stats([value for value, _ in values])
+        item["ci_low"], item["ci_high"] = bootstrap_ci(values)
+        out[key] = item
+    return {
+        "horizon": horizon,
+        "start": start,
+        "end": end,
+        "n": len(rows),
+        "groups": out,
+    }
+
+
+def _print_study(result: dict) -> None:
+    window = f"{result['start'] or 'start'}..{result['end'] or 'now'}"
+    print(f"EVENT STUDY h={result['horizon']}d window={window} n={result['n']}")
+    for key, st in sorted(
+        result["groups"].items(), key=lambda kv: kv[1]["n"], reverse=True
+    ):
+        print(
+            f"  {key:<20} n={st['n']:<5} {st['mean'] * 100:+.3f}% "
+            f"(t {st['t']:+.1f}) hit {st['hit']:.0%} "
+            f"CI95=[{st['ci_low'] * 100:+.3f}%, {st['ci_high'] * 100:+.3f}%]"
+        )
+    print("  -- long/short spread (pos - neg) --")
+    for group in ("corporate", "macro", "other"):
+        pos = result["groups"].get(f"{group}|pos")
+        neg = result["groups"].get(f"{group}|neg")
+        if pos and neg:
+            spread = pos["mean"] - neg["mean"]
+            print(
+                f"  {group:<12} {spread * 100:+.3f}% "
+                f"(pos n={pos['n']}, neg n={neg['n']})"
+            )
 
 
 def _with_ci(result: dict, rows: list[dict], cluster: str) -> dict:
@@ -355,6 +429,11 @@ if __name__ == "__main__":
         help="use raw return when abnormal is missing",
     )
     parser.add_argument(
+        "--study",
+        action="store_true",
+        help="report average abnormal return by event group instead of trading PnL",
+    )
+    parser.add_argument(
         "--walk-forward",
         nargs=3,
         metavar=("START", "END", "STEP_MONTHS"),
@@ -374,7 +453,16 @@ if __name__ == "__main__":
         "require_abnormal": not args.allow_fallback,
         "key_mode": args.key_mode,
     }
-    if args.walk_forward:
+    if args.study:
+        _print_study(
+            event_study(
+                horizon=args.horizon,
+                start=args.test_start,
+                end=args.test_end,
+                require_abnormal=not args.allow_fallback,
+            )
+        )
+    elif args.walk_forward:
         start, end, step = args.walk_forward
         _print_walk(
             walk_forward(start, end, int(step), **common)
