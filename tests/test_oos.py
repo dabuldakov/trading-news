@@ -462,3 +462,38 @@ def test_event_study_uses_intraday_column() -> None:
 
     assert result["horizon"] == "1m"
     assert result["groups"]["corporate|pos"]["mean"] == pytest.approx(0.001)
+
+
+def test_event_study_demeans_by_sector_and_day() -> None:
+    with pool().connection() as conn:
+        source = _source(conn, "rbc", 0.8)
+        _instrument(conn, "SBER", "banks")
+        _instrument(conn, "GAZP", "oil_gas")
+        for index in range(2):
+            _article(
+                conn,
+                source,
+                tag=f"banks-pos-{index}",
+                ticker="SBER",
+                published=datetime(2026, 1, 5),
+                sentiment=1.0,
+                abnormal_ret=0.03,
+            )
+            _article(
+                conn,
+                source,
+                tag=f"oil-neg-{index}",
+                ticker="GAZP",
+                published=datetime(2026, 1, 5),
+                sentiment=-1.0,
+                abnormal_ret=-0.03,
+            )
+        conn.commit()
+
+    raw = event_study(horizon=1)
+    neutral = event_study(horizon=1, demean_by_sector_day=True)
+
+    assert raw["spreads"]["corporate"]["spread"] == pytest.approx(0.06)
+    assert neutral["spreads"]["corporate"]["spread"] == pytest.approx(0.0)
+    assert neutral["groups"]["corporate|pos"]["mean"] == pytest.approx(0.0)
+    assert neutral["groups"]["corporate|neg"]["mean"] == pytest.approx(0.0)

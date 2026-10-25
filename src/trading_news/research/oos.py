@@ -89,6 +89,7 @@ def event_study(
     end: str | None = None,
     require_abnormal: bool = True,
     demean_by_day: bool = False,
+    demean_by_sector_day: bool = False,
     intraday: str | None = None,
 ) -> dict:
     """Средняя аномальная доходность по (группа события, знак) без торговли."""
@@ -115,22 +116,40 @@ def event_study(
     with pool().connection() as conn:
         rows = conn.execute(
             f"""
-            SELECT a.id, a.published_at, n.event_type, n.sentiment, {expr}
+            SELECT a.id, a.published_at, n.event_type, n.sentiment,
+                   co.sector, {expr}
             FROM news_reactions r
             JOIN news_analysis n ON n.article_id = r.article_id
             JOIN news_articles a ON a.id = r.article_id
+            JOIN instruments i ON i.ticker = r.ticker
+            LEFT JOIN companies co ON co.id = i.company_id
             WHERE {" AND ".join(clauses)}
             """,
             params,
         ).fetchall()
     day_values: dict = defaultdict(list)
-    for _article_id, published, _event_type, _sentiment, value in rows:
+    sector_day_values: dict = defaultdict(list)
+    for _id, published, _et, _sent, sector, value in rows:
         day_values[published.date()].append(float(value))
+        if sector:
+            sector_day_values[(published.date(), sector)].append(float(value))
     day_mean = {key: stat_mean(values) for key, values in day_values.items()}
+    sector_day_mean = {
+        key: stat_mean(values) for key, values in sector_day_values.items()
+    }
     groups: dict[str, list[tuple[float, object]]] = defaultdict(list)
-    for article_id, published, event_type, sentiment, value in rows:
+    for article_id, published, event_type, sentiment, sector, value in rows:
         adjusted = float(value)
-        if demean_by_day:
+        if demean_by_sector_day:
+            reference = (
+                sector_day_mean.get((published.date(), sector))
+                if sector
+                else None
+            )
+            if reference is None:
+                reference = day_mean[published.date()]
+            adjusted -= reference
+        elif demean_by_day:
             adjusted -= day_mean[published.date()]
         key = f"{event_group(event_type)}|{sentiment_label(sentiment)}"
         groups[key].append((adjusted, article_id))
@@ -155,7 +174,9 @@ def event_study(
         "start": start,
         "end": end,
         "n": len(rows),
-        "demeaned": demean_by_day,
+        "demeaned": (
+            "sector-day" if demean_by_sector_day else "day" if demean_by_day else False
+        ),
         "groups": out,
         "spreads": spreads,
     }
@@ -163,7 +184,11 @@ def event_study(
 
 def _print_study(result: dict) -> None:
     window = f"{result['start'] or 'start'}..{result['end'] or 'now'}"
-    mode = "demeaned-by-day" if result.get("demeaned") else "raw"
+    mode = (
+        f"demeaned-by-{result['demeaned']}"
+        if result.get("demeaned")
+        else "raw"
+    )
     horizon_label = result["horizon"]
     if isinstance(horizon_label, int):
         horizon_label = f"{horizon_label}d"
@@ -617,6 +642,11 @@ if __name__ == "__main__":
         help="subtract same-day cross-sectional mean before the event study",
     )
     parser.add_argument(
+        "--study-demean-sector",
+        action="store_true",
+        help="subtract same sector-and-day mean (sector-neutral event study)",
+    )
+    parser.add_argument(
         "--portfolio",
         action="store_true",
         help="run a capital-aware portfolio backtest instead of per-event stats",
@@ -653,6 +683,7 @@ if __name__ == "__main__":
                 end=args.test_end,
                 require_abnormal=not args.allow_fallback,
                 demean_by_day=args.study_demean,
+                demean_by_sector_day=args.study_demean_sector,
                 intraday=args.intraday,
             )
         )
