@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from trading_news.db import pool
-from trading_news.news.link import active_tickers, link_external, link_pending
+from trading_news.news.link import (
+    active_tickers,
+    link_external,
+    link_pending,
+    link_pending_fast,
+)
 
 
 def _seed_company(conn, name: str = "ПАО Сбербанк") -> int:
@@ -185,3 +190,32 @@ def test_link_pending_skips_inactive_sector_tickers() -> None:
         ).fetchall()
     assert status == "skipped"
     assert rows == []
+
+
+def test_link_pending_fast_links_exact_aliases() -> None:
+    with pool().connection() as conn:
+        _seed_company(conn)
+        first = _article(conn, "Сбербанк выплатит дивиденды")
+        second = _article(conn, "Погода в Москве улучшится")
+        conn.commit()
+
+    result = link_pending_fast(limit=10)
+
+    assert result["processed"] == 2
+    with pool().connection() as conn:
+        linked = {
+            row[0]
+            for row in conn.execute(
+                "SELECT ticker FROM news_tickers WHERE article_id = %s",
+                (first,),
+            ).fetchall()
+        }
+        statuses = dict(
+            conn.execute(
+                "SELECT id, status FROM news_articles WHERE id IN (%s, %s)",
+                (first, second),
+            ).fetchall()
+        )
+    assert {"SBER", "SBERP"} <= linked
+    assert statuses[first] == "linked"
+    assert statuses[second] == "skipped"

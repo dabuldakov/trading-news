@@ -169,3 +169,86 @@ def link_pending(limit: int = 5000, min_similarity: float = 0.55) -> int:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     print(link_pending())
+
+def _norm(text: str) -> str:
+    return " ".join((text or "").lower().replace("ё", "е").split())
+
+
+def _alias_map(conn) -> dict[str, list[tuple[str, str]]]:
+    rows = conn.execute(
+        """
+        SELECT a.company_id, a.alias, i.ticker
+        FROM aliases a
+        JOIN instruments i
+          ON i.company_id = a.company_id AND i.status = 'active'
+        WHERE length(a.alias) >= 4
+        """
+    ).fetchall()
+    mapping: dict[str, list[tuple[str, str]]] = {}
+    for _company_id, alias, ticker in rows:
+        text = _norm(alias)
+        if not text or text in GENERIC:
+            continue
+        if text.upper().startswith("RU000") and len(text) == 12:
+            continue
+        mapping.setdefault(text, [])
+        if ticker not in [item[0] for item in mapping[text]]:
+            mapping[text].append((ticker, "exact"))
+    return mapping
+
+
+def link_pending_fast(limit: int = 100000, batch: int = 500) -> dict:
+    """Быстрая привязка архивных статей: точный alias-substring без pg_trgm.
+
+    Для live остаётся :func:`link_pending` (fuzzy). Здесь 3k алиасов и десятки
+    тысяч статей: проверка ``alias in text`` в памяти на порядки быстрее, чем
+    similarity-запрос на каждую статью.
+    """
+    processed = 0
+    linked = 0
+    with pool().connection() as conn:
+        aliases = _alias_map(conn)
+        active = active_tickers(conn)
+        keys = list(aliases)
+        while processed < limit:
+            rows = conn.execute(
+                """
+                SELECT id, title, COALESCE(summary, '')
+                FROM news_articles
+                WHERE status = 'new'
+                ORDER BY published_at
+                LIMIT %s
+                """,
+                (min(batch, limit - processed),),
+            ).fetchall()
+            if not rows:
+                break
+            for article_id, title, summary in rows:
+                text = _norm(f"{title} {summary}")
+                best: dict[str, str] = {}
+                for alias in keys:
+                    if alias in text:
+                        for ticker, method in aliases[alias]:
+                            best.setdefault(ticker, method)
+                for ticker, method in best.items():
+                    conn.execute(
+                        """
+                        INSERT INTO news_tickers
+                            (article_id, ticker, confidence, method)
+                        VALUES (%s, %s, 0.95, %s)
+                        ON CONFLICT (article_id, ticker) DO UPDATE SET
+                            confidence = GREATEST(
+                                news_tickers.confidence, EXCLUDED.confidence
+                            )
+                        """,
+                        (article_id, ticker, method),
+                    )
+                    linked += 1
+                sector_links = link_external(conn, article_id, text, active)
+                conn.execute(
+                    "UPDATE news_articles SET status = %s WHERE id = %s",
+                    ("linked" if (best or sector_links) else "skipped", article_id),
+                )
+                processed += 1
+            conn.commit()
+    return {"processed": processed, "linked": linked}
