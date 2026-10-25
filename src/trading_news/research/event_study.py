@@ -172,19 +172,24 @@ def _reaction(bars: list[dict], market: list[dict], published_at: datetime):
     }
 
 
-def build_reactions(limit: int | None = 500, *, rebuild: bool = False) -> int:
+def build_reactions(
+    limit: int | None = 500,
+    *,
+    rebuild: bool = False,
+    days: int = 400,
+) -> int:
     query = """
         SELECT a.published_at, t.ticker, a.id
         FROM news_articles a
         JOIN news_tickers t ON t.article_id = a.id
         JOIN instruments i ON i.ticker = t.ticker
-        WHERE a.published_at >= now() - interval '400 days'
+        WHERE a.published_at >= now() - (%s || ' days')::interval
         ORDER BY a.published_at DESC
     """
-    params: tuple = ()
+    params: list = [days]
     if limit is not None:
         query += " LIMIT %s"
-        params = (limit,)
+        params.append(limit)
     with pool().connection() as conn:
         rows = conn.execute(query, params).fetchall()
     if not rows:

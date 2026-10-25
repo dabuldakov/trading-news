@@ -266,13 +266,18 @@ def spearman(left: list[float], right: list[float]) -> float:
 
 def analyze(records: list[dict], *, top: int = 3, cost: float = COST) -> dict:
     buckets: dict[str, list[float]] = {"pos": [], "neg": [], "neutral": []}
+    by_sector: dict[str, dict[str, list[float]]] = defaultdict(
+        lambda: {"pos": [], "neg": [], "neutral": []}
+    )
     for row in records:
         if row["sentiment"] > 0:
-            buckets["pos"].append(row["excess"])
+            label = "pos"
         elif row["sentiment"] < 0:
-            buckets["neg"].append(row["excess"])
+            label = "neg"
         else:
-            buckets["neutral"].append(row["excess"])
+            label = "neutral"
+        buckets[label].append(row["excess"])
+        by_sector[row["sector"]][label].append(row["excess"])
     bucket_stats = {key: stats(values) for key, values in buckets.items()}
     spread, pvalue = permutation_spread(buckets["pos"], buckets["neg"])
     bucket_stats["spread"] = {
@@ -325,6 +330,12 @@ def analyze(records: list[dict], *, top: int = 3, cost: float = COST) -> dict:
         "ic_sentiment": _ic(ic_sentiment),
         "ic_intensity": _ic(ic_intensity),
         "long_short": stats(long_short),
+        "by_sector": {
+            sector: {
+                label: stats(values) for label, values in labels.items()
+            }
+            for sector, labels in by_sector.items()
+        },
     }
 
 
@@ -357,6 +368,21 @@ def _print(result: dict, *, start: str, end: str, horizon: int) -> None:
         f"  long-short top   n={ls['n']:<4} {ls['mean'] * 100:+.3f}% "
         f"(t {ls['t']:+.1f}) hit {ls['hit']:.0%}"
     )
+    print("  -- by sector (neg / pos excess) --")
+    for sector, labels in sorted(
+        result["by_sector"].items(),
+        key=lambda item: item[1]["neg"]["n"],
+        reverse=True,
+    ):
+        if labels["neg"]["n"] < 10 and labels["pos"]["n"] < 10:
+            continue
+        neg = labels["neg"]
+        pos = labels["pos"]
+        print(
+            f"  {sector:<12} neg n={neg['n']:<4} {neg['mean'] * 100:+.3f}% "
+            f"(t {neg['t']:+.1f}) | pos n={pos['n']:<4} "
+            f"{pos['mean'] * 100:+.3f}% (t {pos['t']:+.1f})"
+        )
 
 
 def run(

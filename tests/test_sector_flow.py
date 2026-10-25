@@ -74,6 +74,7 @@ def test_analyze_detects_cross_sectional_signal() -> None:
     assert result["buckets"]["spread"]["mean"] > 0
     assert result["long_short"]["mean"] > 0
     assert result["observations"] == 40
+    assert set(result["by_sector"]) == {"s0", "s1", "s2", "s3"}
 
 
 def test_load_flow_dedups_articles_per_sector() -> None:
