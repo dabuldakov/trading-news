@@ -89,19 +89,30 @@ def evaluate(
         ).fetchall()
 
     results: list[dict] = []
+    all_pairs: list[dict] = []
     for _published, ticker, event_type, sentiment, source, ret_1d, abnormal in rows:
         key = f"{event_type}|{_label(sentiment)}|{source or 'unknown'}"
         marker = markers.get(key)
         if marker is None or marker["n"] < MIN_MARKER_N:
             continue
-        edge = marker["mean"] - cost
-        if abs(edge) < min_edge:
-            continue
         reaction = abnormal if abnormal is not None else ret_1d
         if reaction is None:
             continue
-        side = 1 if edge > 0 else -1
+        side = 1 if marker["mean"] > cost else -1
         pnl = side * float(reaction) - cost
+        all_pairs.append(
+            {
+                "marker": key,
+                "source": source or "unknown",
+                "ticker": ticker,
+                "side": side,
+                "reaction": float(reaction),
+                "pnl": pnl,
+            }
+        )
+        edge = marker["mean"] - cost
+        if abs(edge) < min_edge:
+            continue
         results.append(
             {
                 "marker": key,
@@ -114,11 +125,15 @@ def evaluate(
         )
 
     overall = _stats([row["pnl"] for row in results])
+    overall_all = _stats([row["pnl"] for row in all_pairs])
     by_marker: dict[str, dict] = {}
     by_source: dict[str, dict] = {}
+    by_marker_all: dict[str, dict] = {}
     for row in results:
         by_marker.setdefault(row["marker"], []).append(row["pnl"])
         by_source.setdefault(row["source"], []).append(row["pnl"])
+    for row in all_pairs:
+        by_marker_all.setdefault(row["marker"], []).append(row["pnl"])
 
     return {
         "train_end": train_end,
@@ -126,7 +141,9 @@ def evaluate(
         "markers_train": len(markers),
         "signals_oos": len(results),
         "overall": overall,
+        "overall_all": overall_all,
         "by_marker": {k: _stats(v) for k, v in by_marker.items()},
+        "by_marker_all": {k: _stats(v) for k, v in by_marker_all.items()},
         "by_source": {k: _stats(v) for k, v in by_source.items()},
     }
 
@@ -138,12 +155,17 @@ def _print(summary: dict) -> None:
     )
     o = summary["overall"]
     print(
-        f"  overall: n={o['n']} mean={o['mean']*100:+.3f}% "
+        f"  filtered: n={o['n']} mean={o['mean']*100:+.3f}% "
         f"(t {o['t']:+.1f}) hit {o['hit']:.0%}"
     )
+    a = summary["overall_all"]
+    print(
+        f"  ALL pairs: n={a['n']} mean={a['mean']*100:+.3f}% "
+        f"(t {a['t']:+.1f}) hit {a['hit']:.0%}"
+    )
     for key, st in sorted(
-        summary["by_marker"].items(), key=lambda kv: kv[1]["mean"], reverse=True
-    ):
+        summary["by_marker_all"].items(), key=lambda kv: kv[1]["mean"], reverse=True
+    )[:12]:
         print(
             f"  {key:<28} n={st['n']:<4} {st['mean']*100:+.3f}% "
             f"(t {st['t']:+.1f}) hit {st['hit']:.0%}"
