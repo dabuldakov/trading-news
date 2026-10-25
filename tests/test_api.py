@@ -71,3 +71,42 @@ def test_companies_returns_counts(client: TestClient) -> None:
     companies = response.json()["companies"]
     assert companies[0]["name"] == "Газпром"
     assert companies[0]["instruments"] == 1
+
+
+def test_signals_hide_unvalidated_by_default(client: TestClient) -> None:
+    with pool().connection() as conn:
+        company = conn.execute(
+            "INSERT INTO companies (name) VALUES ('ПАО Сбербанк') RETURNING id"
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO instruments (ticker, secid, company_id) "
+            "VALUES ('SBER', 'SBER', %s)",
+            (company,),
+        )
+        article = conn.execute(
+            """
+            INSERT INTO news_articles (title, published_at, hash)
+            VALUES ('Сбербанк', now(), md5('signal-article'))
+            RETURNING id
+            """
+        ).fetchone()[0]
+        for side, validated in (("buy", True), ("sell", False)):
+            conn.execute(
+                """
+                INSERT INTO signals
+                    (article_id, ticker, side, expected_edge, confidence,
+                     horizon, marker_key, validated)
+                VALUES (%s, 'SBER', %s, 0.01, 0.8, '1d', 'm', %s)
+                """,
+                (article, side, validated),
+            )
+        conn.commit()
+
+    response = client.get("/internal/signals", headers=HEADERS)
+    assert response.status_code == 200
+    assert [row["validated"] for row in response.json()["signals"]] == [True]
+
+    response = client.get(
+        "/internal/signals?include_unvalidated=true", headers=HEADERS
+    )
+    assert len(response.json()["signals"]) == 2

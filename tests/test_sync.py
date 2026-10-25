@@ -46,7 +46,12 @@ def test_sync_reference_upserts_instrument_company_alias() -> None:
 
     result = sync_reference()
 
-    assert result == {"securities": 1, "companies": 1, "aliases": 4}
+    assert result == {
+        "securities": 1,
+        "companies": 1,
+        "aliases": 4,
+        "sectors": 1,
+    }
     with pool().connection() as conn:
         instrument = conn.execute(
             """

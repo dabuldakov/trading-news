@@ -10,6 +10,7 @@ import httpx
 from ..config import settings
 from ..db import pool
 from .moex import Issuer, MoexClient, Security
+from .sectors import backfill_sectors
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,7 @@ def sync_reference() -> dict:
                 time.sleep(0.1)
                 if (index + 1) % 20 == 0:
                     conn.commit()
+            sectors = backfill_sectors(conn)
             conn.execute(
                 """
                 UPDATE instruments SET status = 'inactive'
@@ -173,6 +175,7 @@ def sync_reference() -> dict:
                             "securities": len(securities),
                             "companies": len(companies),
                             "aliases": aliases,
+                            "sectors": sectors,
                         }
                     ),
                     run_id,
@@ -183,6 +186,7 @@ def sync_reference() -> dict:
                 "securities": len(securities),
                 "companies": len(companies),
                 "aliases": aliases,
+                "sectors": sectors,
             }
         except Exception as exc:
             conn.execute(

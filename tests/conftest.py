@@ -25,7 +25,8 @@ def _clean() -> None:
         conn.execute(
             """
             TRUNCATE news_articles, news_sources, aliases, instruments,
-                     companies, sync_runs, news_analysis, signals
+                     companies, sync_runs, news_analysis, signals,
+                     event_markers
             RESTART IDENTITY CASCADE
             """
         )

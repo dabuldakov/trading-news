@@ -115,19 +115,24 @@ def news(since: str | None = None, limit: int = 50) -> dict:
 
 
 @app.get("/internal/signals", dependencies=[Depends(require_key)])
-def signals(since: str | None = None, limit: int = 100) -> dict:
+def signals(
+    since: str | None = None,
+    limit: int = 100,
+    include_unvalidated: bool = False,
+) -> dict:
     with pool().connection() as conn:
         rows = _rows(
             conn,
             """
             SELECT id, article_id, ticker, side, expected_edge, confidence,
-                   horizon, marker_key, created_at
+                   horizon, marker_key, validated, created_at
             FROM signals
             WHERE (%s::timestamptz IS NULL OR created_at >= %s::timestamptz)
+              AND (%s OR validated)
             ORDER BY created_at DESC
             LIMIT %s
             """,
-            (since, since, limit),
+            (since, since, include_unvalidated, limit),
         )
     return {"signals": rows}
 

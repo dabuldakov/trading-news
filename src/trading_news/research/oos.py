@@ -16,17 +16,23 @@ from __future__ import annotations
 import argparse
 import calendar
 import logging
+import math
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
+from statistics import mean as stat_mean
+from statistics import stdev
 
 from ..db import pool
 from .stats import (
+    bh_qvalues,
     bootstrap_ci,
     event_group,
     marker_key,
+    permutation_spread,
     sentiment_label,
     source_key,
     stats,
+    t_pvalue,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,6 +88,7 @@ def event_study(
     start: str | None = None,
     end: str | None = None,
     require_abnormal: bool = True,
+    demean_by_day: bool = False,
 ) -> dict:
     """Средняя аномальная доходность по (группа события, знак) без торговли."""
     if horizon not in ABNORMAL:
@@ -100,7 +107,7 @@ def event_study(
     with pool().connection() as conn:
         rows = conn.execute(
             f"""
-            SELECT a.id, n.event_type, n.sentiment, {expr}
+            SELECT a.id, a.published_at, n.event_type, n.sentiment, {expr}
             FROM news_reactions r
             JOIN news_analysis n ON n.article_id = r.article_id
             JOIN news_articles a ON a.id = r.article_id
@@ -108,27 +115,51 @@ def event_study(
             """,
             params,
         ).fetchall()
+    day_values: dict = defaultdict(list)
+    for _article_id, published, _event_type, _sentiment, value in rows:
+        day_values[published.date()].append(float(value))
+    day_mean = {key: stat_mean(values) for key, values in day_values.items()}
     groups: dict[str, list[tuple[float, object]]] = defaultdict(list)
-    for article_id, event_type, sentiment, value in rows:
+    for article_id, published, event_type, sentiment, value in rows:
+        adjusted = float(value)
+        if demean_by_day:
+            adjusted -= day_mean[published.date()]
         key = f"{event_group(event_type)}|{sentiment_label(sentiment)}"
-        groups[key].append((float(value), article_id))
+        groups[key].append((adjusted, article_id))
     out = {}
     for key, values in groups.items():
         item = stats([value for value, _ in values])
         item["ci_low"], item["ci_high"] = bootstrap_ci(values)
         out[key] = item
+    spreads = {}
+    for group in ("corporate", "macro", "other"):
+        positive = [value for value, _ in groups.get(f"{group}|pos", [])]
+        negative = [value for value, _ in groups.get(f"{group}|neg", [])]
+        spread, pvalue = permutation_spread(positive, negative)
+        spreads[group] = {
+            "spread": spread,
+            "p": pvalue,
+            "pos_n": len(positive),
+            "neg_n": len(negative),
+        }
     return {
         "horizon": horizon,
         "start": start,
         "end": end,
         "n": len(rows),
+        "demeaned": demean_by_day,
         "groups": out,
+        "spreads": spreads,
     }
 
 
 def _print_study(result: dict) -> None:
     window = f"{result['start'] or 'start'}..{result['end'] or 'now'}"
-    print(f"EVENT STUDY h={result['horizon']}d window={window} n={result['n']}")
+    mode = "demeaned-by-day" if result.get("demeaned") else "raw"
+    print(
+        f"EVENT STUDY h={result['horizon']}d window={window} "
+        f"n={result['n']} ({mode})"
+    )
     for key, st in sorted(
         result["groups"].items(), key=lambda kv: kv[1]["n"], reverse=True
     ):
@@ -137,16 +168,12 @@ def _print_study(result: dict) -> None:
             f"(t {st['t']:+.1f}) hit {st['hit']:.0%} "
             f"CI95=[{st['ci_low'] * 100:+.3f}%, {st['ci_high'] * 100:+.3f}%]"
         )
-    print("  -- long/short spread (pos - neg) --")
-    for group in ("corporate", "macro", "other"):
-        pos = result["groups"].get(f"{group}|pos")
-        neg = result["groups"].get(f"{group}|neg")
-        if pos and neg:
-            spread = pos["mean"] - neg["mean"]
-            print(
-                f"  {group:<12} {spread * 100:+.3f}% "
-                f"(pos n={pos['n']}, neg n={neg['n']})"
-            )
+    print("  -- long/short spread (pos - neg, permutation p) --")
+    for group, item in result["spreads"].items():
+        print(
+            f"  {group:<12} {item['spread'] * 100:+.3f}% "
+            f"p={item['p']:.3f} (pos n={item['pos_n']}, neg n={item['neg_n']})"
+        )
 
 
 def _with_ci(result: dict, rows: list[dict], cluster: str) -> dict:
@@ -192,7 +219,7 @@ def evaluate(
             params.append(test_end)
         rows = conn.execute(
             f"""
-            SELECT a.id, t.ticker, n.event_type, n.sentiment,
+            SELECT a.id, a.published_at, t.ticker, n.event_type, n.sentiment,
                    s.name AS source, s.credibility, co.sector,
                    {abnormal}, {raw}, r.adv_rub
             FROM news_articles a
@@ -212,6 +239,7 @@ def evaluate(
     signals: list[dict] = []
     for (
         article_id,
+        published,
         ticker,
         event_type,
         sentiment,
@@ -243,6 +271,7 @@ def evaluate(
         pnl = side * float(reaction) - cost
         row = {
             "article_id": article_id,
+            "published": published,
             "marker": key,
             "group": group,
             "source": source_key(source),
@@ -270,6 +299,18 @@ def evaluate(
     by_source_all = _group_stats(all_pairs, "source")
     by_sector_all = _group_stats(all_pairs, "sector")
     by_marker_signal = _group_stats(signals, "marker")
+    marker_keys = list(by_marker_all)
+    pvalues = [
+        t_pvalue(by_marker_all[key]["t"], by_marker_all[key]["n"])
+        for key in marker_keys
+    ]
+    for key, qvalue in zip(marker_keys, bh_qvalues(pvalues), strict=True):
+        by_marker_all[key]["q"] = qvalue
+    markers_fdr10 = sum(
+        1
+        for key in marker_keys
+        if by_marker_all[key]["q"] <= 0.10 and by_marker_all[key]["n"] >= 20
+    )
 
     return {
         "train_end": train_end,
@@ -278,6 +319,7 @@ def evaluate(
         "horizon": horizon,
         "key_mode": key_mode,
         "markers_train": len(markers),
+        "markers_fdr10": markers_fdr10,
         "pairs": len(all_pairs),
         "signals_oos": len(signals),
         "overall": overall,
@@ -288,6 +330,7 @@ def evaluate(
         "by_source_all": by_source_all,
         "by_sector_all": by_sector_all,
         "pairs_rows": all_pairs,
+        "signals_rows": signals,
     }
 
 
@@ -298,8 +341,8 @@ def _print(summary: dict, *, top: int = 10) -> None:
     print(
         f"OOS h={summary['horizon']}d key={summary['key_mode']} "
         f"train<{summary['train_end']} {window} | "
-        f"маркеров {summary['markers_train']} | пар {summary['pairs']} | "
-        f"сигналов {summary['signals_oos']}"
+        f"маркеров {summary['markers_train']} (FDR10 {summary['markers_fdr10']}) "
+        f"| пар {summary['pairs']} | сигналов {summary['signals_oos']}"
     )
     for name, st in (
         ("SIGNAL", summary["overall"]),
@@ -341,8 +384,127 @@ def _print(summary: dict, *, top: int = 10) -> None:
     )[:top]:
         print(
             f"  {key:<28} n={st['n']:<4} {st['mean'] * 100:+.3f}% "
-            f"(t {st['t']:+.1f}) hit {st['hit']:.0%}"
+            f"(t {st['t']:+.1f}, q {st.get('q', 1.0):.2f}) hit {st['hit']:.0%}"
         )
+
+
+def portfolio_backtest(
+    train_end: str,
+    test_start: str,
+    *,
+    test_end: str | None = None,
+    horizon: int = 1,
+    key_mode: str = "source",
+    cost: float = COST,
+    min_edge: float = 0.001,
+    min_marker_n: int = MIN_MARKER_N,
+    min_t: float = MIN_T,
+    min_adv: float = 0.0,
+    min_credibility: float = 0.0,
+    only_group: str | None = None,
+    require_abnormal: bool = True,
+    capital: float = 1_000_000.0,
+    per_trade_pct: float = 0.1,
+    max_positions: int = 10,
+    long_short: bool = True,
+) -> dict:
+    """Портфельный бэктест сигналов: капитал, перекрытие, издержки, drawdown."""
+    summary = evaluate(
+        train_end,
+        test_start,
+        test_end=test_end,
+        horizon=horizon,
+        key_mode=key_mode,
+        cost=cost,
+        min_edge=min_edge,
+        min_marker_n=min_marker_n,
+        min_t=min_t,
+        min_adv=min_adv,
+        min_credibility=min_credibility,
+        only_group=only_group,
+        require_abnormal=require_abnormal,
+    )
+    trades = [
+        row for row in summary["signals_rows"] if long_short or row["side"] > 0
+    ]
+    trades.sort(key=lambda row: row["published"])
+    capital = float(capital)
+    per_trade_pct = max(0.0, float(per_trade_pct))
+    hold_days = max(1, horizon)
+    active: list[dict] = []
+    realized: list[tuple[object, float]] = []
+    opened = 0
+
+    def release(day) -> None:
+        remaining = []
+        for position in active:
+            if position["exit"] <= day:
+                contribution = position["pnl"] * per_trade_pct
+                realized.append((position["exit"], contribution))
+            else:
+                remaining.append(position)
+        active[:] = remaining
+
+    for row in trades:
+        release(row["published"])
+        if len(active) >= max_positions:
+            continue
+        exit_at = row["published"] + timedelta(days=round(hold_days * 1.45) + 1)
+        active.append({"exit": exit_at, "pnl": row["pnl"]})
+        opened += 1
+    if active:
+        release(max(position["exit"] for position in active) + timedelta(days=1))
+
+    equity = capital
+    peak = capital
+    max_drawdown = 0.0
+    daily: dict = defaultdict(list)
+    for when, contribution in sorted(realized, key=lambda item: item[0]):
+        equity *= 1.0 + contribution
+        peak = max(peak, equity)
+        max_drawdown = max(max_drawdown, 1.0 - equity / peak)
+        daily[when.date()].append(contribution)
+
+    day_returns = []
+    for _day, contributions in sorted(daily.items()):
+        growth = 1.0
+        for contribution in contributions:
+            growth *= 1.0 + contribution
+        day_returns.append(growth - 1.0)
+    mean_return = stat_mean(day_returns) if day_returns else 0.0
+    std_return = stdev(day_returns) if len(day_returns) > 1 else 0.0
+    sharpe = mean_return / std_return * math.sqrt(252.0) if std_return > 0 else 0.0
+    pnls = [row["pnl"] for row in trades]
+    return {
+        "horizon": horizon,
+        "key_mode": key_mode,
+        "trades": len(trades),
+        "opened": opened,
+        "total_return": equity / capital - 1.0 if capital else 0.0,
+        "sharpe": sharpe,
+        "max_drawdown": max_drawdown,
+        "hit": (sum(1 for pnl in pnls if pnl > 0) / len(pnls)) if pnls else 0.0,
+        "avg_pnl": stat_mean(pnls) if pnls else 0.0,
+        "final_equity": equity,
+        "long_short": long_short,
+        "max_positions": max_positions,
+        "per_trade_pct": per_trade_pct,
+    }
+
+
+def _print_portfolio(result: dict) -> None:
+    print(
+        f"PORTFOLIO h={result['horizon']}d key={result['key_mode']} "
+        f"{'long/short' if result['long_short'] else 'long-only'} "
+        f"signals={result['trades']} opened={result['opened']}"
+    )
+    print(
+        f"  total={result['total_return'] * 100:+.2f}% "
+        f"sharpe={result['sharpe']:+.2f} "
+        f"maxDD={result['max_drawdown'] * 100:.2f}% "
+        f"hit={result['hit']:.0%} avg={result['avg_pnl'] * 100:+.3f}% "
+        f"equity={result['final_equity']:.0f}"
+    )
 
 
 def _add_months(day: date, months: int) -> date:
@@ -434,6 +596,20 @@ if __name__ == "__main__":
         help="report average abnormal return by event group instead of trading PnL",
     )
     parser.add_argument(
+        "--study-demean",
+        action="store_true",
+        help="subtract same-day cross-sectional mean before the event study",
+    )
+    parser.add_argument(
+        "--portfolio",
+        action="store_true",
+        help="run a capital-aware portfolio backtest instead of per-event stats",
+    )
+    parser.add_argument("--capital", type=float, default=1_000_000.0)
+    parser.add_argument("--per-trade-pct", type=float, default=0.1)
+    parser.add_argument("--max-positions", type=int, default=10)
+    parser.add_argument("--long-only", action="store_true")
+    parser.add_argument(
         "--walk-forward",
         nargs=3,
         metavar=("START", "END", "STEP_MONTHS"),
@@ -460,6 +636,29 @@ if __name__ == "__main__":
                 start=args.test_start,
                 end=args.test_end,
                 require_abnormal=not args.allow_fallback,
+                demean_by_day=args.study_demean,
+            )
+        )
+    elif args.portfolio:
+        _print_portfolio(
+            portfolio_backtest(
+                args.train_end,
+                test_start,
+                test_end=args.test_end,
+                horizon=args.horizon,
+                key_mode=args.key_mode,
+                cost=args.cost,
+                min_edge=args.min_edge,
+                min_marker_n=args.min_marker_n,
+                min_t=args.min_t,
+                min_adv=args.min_adv,
+                min_credibility=args.min_credibility,
+                only_group=args.group,
+                require_abnormal=not args.allow_fallback,
+                capital=args.capital,
+                per_trade_pct=args.per_trade_pct,
+                max_positions=args.max_positions,
+                long_short=not args.long_only,
             )
         )
     elif args.walk_forward:

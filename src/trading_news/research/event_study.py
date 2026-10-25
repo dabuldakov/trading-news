@@ -22,7 +22,8 @@ import httpx
 
 from ..config import settings
 from ..db import pool
-from .stats import sentiment_label, source_key
+from .stats import marker_key, sentiment_label, source_key
+from .stats import stats as marker_stats
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ COST = 0.001  # 10 bp round trip (commission + spread estimate)
 MIN_MARKER_N = 5
 FORWARD_DAYS = 40
 PAGE = 500
+INTRADAY_HORIZONS = (1, 5, 30, 60)
+INTRADAY_DAYS = 120
 
 
 def _candles(
@@ -40,6 +43,7 @@ def _candles(
     end: str,
     *,
     market: str = "shares",
+    interval: int = 24,
 ) -> list[dict]:
     if market == "index":
         path = (
@@ -59,7 +63,7 @@ def _candles(
             params = {
                 "from": start,
                 "till": end,
-                "interval": 24,
+                "interval": interval,
                 "iss.meta": "off",
                 "start": offset,
             }
@@ -270,6 +274,104 @@ def build_reactions(limit: int | None = 500, *, rebuild: bool = False) -> int:
     return len(payload)
 
 
+def _intraday_reaction(bars: list[dict], published_at: datetime):
+    if published_at.tzinfo is not None:
+        published_at = published_at.astimezone(ZoneInfo("Europe/Moscow")).replace(
+            tzinfo=None
+        )
+    idx = _at_or_after(bars, published_at)
+    if idx is None:
+        return None
+    if idx >= 1:
+        base = bars[idx - 1]["close"]
+    else:
+        base = bars[idx]["open"] or bars[idx]["close"]
+    if base <= 0:
+        return None
+    result: dict[str, float | None] = {}
+    for horizon in INTRADAY_HORIZONS:
+        pos = idx + horizon - 1
+        key = "ret_1h" if horizon == 60 else f"ret_{horizon}m"
+        result[key] = bars[pos]["close"] / base - 1.0 if pos < len(bars) else None
+    return result
+
+
+def build_intraday_reactions(
+    days: int = INTRADAY_DAYS,
+    limit: int = 500,
+) -> int:
+    """Посчитать реакции 1м/5м/30м/1ч по минутным свечам MOEX.
+
+    Берём только свежие публикации (``days`` дней), чтобы не тянуть минутки за
+    весь бэкфилл. Свечи кэшируются по (тикер, дата) — новостей на бумагу в один
+    день обычно несколько.
+    """
+    with pool().connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT a.published_at, r.article_id, r.ticker
+            FROM news_reactions r
+            JOIN news_articles a ON a.id = r.article_id
+            WHERE a.published_at >= now() - (%s || ' days')::interval
+            ORDER BY a.published_at DESC
+            LIMIT %s
+            """,
+            (days, limit),
+        ).fetchall()
+
+    cache: dict[tuple[str, str], list[dict]] = {}
+    updates: list[tuple] = []
+    for published_at, article_id, ticker in rows:
+        local = published_at.astimezone(ZoneInfo("Europe/Moscow"))
+        day = local.date()
+        key = (ticker, day.isoformat())
+        if key not in cache:
+            try:
+                cache[key] = _candles(
+                    ticker,
+                    "TQBR",
+                    day.isoformat(),
+                    (day + timedelta(days=3)).isoformat(),
+                    interval=1,
+                )
+            except Exception as exc:  # noqa: BLE001 - one ticker must not break
+                logger.warning("intraday %s %s: %s", ticker, day, exc)
+                cache[key] = []
+        bars = cache[key]
+        if not bars:
+            continue
+        result = _intraday_reaction(bars, published_at)
+        if result is None:
+            continue
+        updates.append(
+            (
+                result.get("ret_1m"),
+                result.get("ret_5m"),
+                result.get("ret_30m"),
+                result.get("ret_1h"),
+                article_id,
+                ticker,
+            )
+        )
+        if len(updates) % 200 == 0:
+            logger.info("intraday: %s updates", len(updates))
+
+    if not updates:
+        return 0
+    with pool().connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.executemany(
+                """
+                UPDATE news_reactions
+                SET ret_1m = %s, ret_5m = %s, ret_30m = %s, ret_1h = %s
+                WHERE article_id = %s AND ticker = %s
+                """,
+                updates,
+            )
+        conn.commit()
+    return len(updates)
+
+
 def _percentile(values: list[float], p: float) -> float:
     ordered = sorted(values)
     if not ordered:
@@ -340,12 +442,38 @@ def build_markers() -> int:
     return written
 
 
+def _recent_markers(days: int) -> dict[str, dict]:
+    with pool().connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT n.event_type, n.sentiment, s.name AS source,
+                   COALESCE(r.abnormal_ret, r.ret_1d) AS reaction
+            FROM news_reactions r
+            JOIN news_analysis n ON n.article_id = r.article_id
+            JOIN news_articles a ON a.id = r.article_id
+            LEFT JOIN news_sources s ON s.id = a.source_id
+            WHERE r.t0 >= now() - (%s || ' days')::interval
+              AND COALESCE(r.abnormal_ret, r.ret_1d) IS NOT NULL
+            """,
+            (days,),
+        ).fetchall()
+    groups: dict[str, list[float]] = {}
+    for event_type, sentiment, source, reaction in rows:
+        key = marker_key(event_type, sentiment, source)
+        groups.setdefault(key, []).append(float(reaction))
+    return {key: marker_stats(values) for key, values in groups.items()}
+
+
 def build_signals(
     limit: int = 500,
     min_edge: float = 0.001,
     *,
     min_t: float = 2.0,
+    recent_days: int = 180,
+    min_recent_n: int = 10,
+    min_recent_t: float = 2.0,
 ) -> int:
+    recent = _recent_markers(recent_days)
     with pool().connection() as conn:
         rows = conn.execute(
             """
@@ -371,7 +499,7 @@ def build_signals(
 
         written = 0
         for article_id, ticker, event_type, sentiment, source, _abnormal in rows:
-            key = f"{event_type}|{sentiment_label(sentiment)}|{source_key(source)}"
+            key = marker_key(event_type, sentiment, source)
             marker = markers.get(key)
             if marker is None:
                 continue
@@ -383,15 +511,27 @@ def build_signals(
                 continue
             side = "buy" if edge > 0 else "sell"
             confidence = min(1.0, abs(float(t_stat)) / 3.0)
+            recent_marker = recent.get(key)
+            validated = bool(
+                recent_marker
+                and recent_marker["n"] >= min_recent_n
+                and abs(recent_marker["t"]) >= min_recent_t
+                and (recent_marker["mean"] > 0) == (mean > 0)
+                and abs(recent_marker["mean"] - COST) >= min_edge
+            )
             conn.execute(
                 """
                 INSERT INTO signals
                     (article_id, ticker, side, expected_edge, confidence,
-                     horizon, marker_key)
-                VALUES (%s, %s, %s, %s, %s, '1d', %s)
-                ON CONFLICT (article_id, ticker, side) DO NOTHING
+                     horizon, marker_key, validated)
+                VALUES (%s, %s, %s, %s, %s, '1d', %s, %s)
+                ON CONFLICT (article_id, ticker, side) DO UPDATE SET
+                    expected_edge = EXCLUDED.expected_edge,
+                    confidence = EXCLUDED.confidence,
+                    marker_key = EXCLUDED.marker_key,
+                    validated = EXCLUDED.validated
                 """,
-                (article_id, ticker, side, edge, confidence, key),
+                (article_id, ticker, side, edge, confidence, key, validated),
             )
             written += 1
         conn.commit()
