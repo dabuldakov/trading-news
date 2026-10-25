@@ -30,7 +30,10 @@ SECTOR_KEYWORDS = {
     "oil": {"oil", "brent", "wti", "crude", "opec", "нефт"},
     "gas": {"gas", "lng", "газ"},
     "gold": {"gold", "золот"},
-    "metals": {"copper", "nickel", "aluminium", "aluminum", "steel", "мед", "никел", "стал"},
+    "metals": {
+        "copper", "nickel", "aluminium", "aluminum", "steel",
+        "мед", "никел", "стал",
+    },
     "china": {"china", "chinese", "китай"},
     "rates": {"fed", "fomc", "ecb", "rate hike", "rate cut", "ставк"},
 }

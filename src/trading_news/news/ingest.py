@@ -112,8 +112,12 @@ def ingest_source(source: dict, client: httpx.Client | None = None) -> int:
     with pool().connection() as conn:
         source_id = _source_id(conn, source)
         for item in items:
-            if not source.get("macro") and source.get("market") != "external" and not is_relevant(
-                conn, f"{item['title']} {item['summary']}"
+            if (
+                not source.get("macro")
+                and source.get("market") != "external"
+                and not is_relevant(
+                    conn, f"{item['title']} {item['summary']}"
+                )
             ):
                 irrelevant += 1
                 continue
