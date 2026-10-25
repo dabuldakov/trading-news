@@ -62,7 +62,7 @@ def build_scheduler() -> BlockingScheduler:
     )
     scheduler.add_job(
         _sector_paper_tick,
-        CronTrigger(hour=23, minute=30, timezone=settings.tz),
+        CronTrigger(hour=8, minute=0, timezone=settings.tz),
         id="sector-paper",
         max_instances=1,
         coalesce=True,
