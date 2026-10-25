@@ -23,7 +23,7 @@ from ..db import pool
 from .stats import (
     bootstrap_ci,
     event_group,
-    sentiment_label,
+    marker_key,
     source_key,
     stats,
 )
@@ -44,6 +44,7 @@ def _train_markers(
     horizon: int,
     *,
     require_abnormal: bool,
+    key_mode: str,
 ) -> dict[str, dict]:
     abnormal = f"r.{ABNORMAL[horizon]}"
     raw = f"r.{RETURN[horizon]}"
@@ -62,7 +63,7 @@ def _train_markers(
     ).fetchall()
     groups: dict[str, list[float]] = {}
     for event_type, sentiment, source, reaction in rows:
-        key = f"{event_type}|{sentiment_label(sentiment)}|{source_key(source)}"
+        key = marker_key(event_type, sentiment, source, key_mode)
         groups.setdefault(key, []).append(float(reaction))
     return {key: stats(values) for key, values in groups.items()}
 
@@ -95,6 +96,7 @@ def evaluate(
     min_credibility: float = 0.0,
     only_group: str | None = None,
     require_abnormal: bool = True,
+    key_mode: str = "source",
 ) -> dict:
     if horizon not in ABNORMAL:
         raise ValueError(f"horizon must be one of {sorted(ABNORMAL)}")
@@ -103,7 +105,11 @@ def evaluate(
 
     with pool().connection() as conn:
         markers = _train_markers(
-            conn, train_end, horizon, require_abnormal=require_abnormal
+            conn,
+            train_end,
+            horizon,
+            require_abnormal=require_abnormal,
+            key_mode=key_mode,
         )
         where = "a.published_at >= %s"
         params: list = [test_start]
@@ -149,7 +155,7 @@ def evaluate(
             continue
         if min_adv > 0 and (adv is None or float(adv) < min_adv):
             continue
-        key = f"{event_type}|{sentiment_label(sentiment)}|{source_key(source)}"
+        key = marker_key(event_type, sentiment, source, key_mode)
         marker = markers.get(key)
         if marker is None or marker["n"] < min_marker_n:
             continue
@@ -196,6 +202,7 @@ def evaluate(
         "test_start": test_start,
         "test_end": test_end,
         "horizon": horizon,
+        "key_mode": key_mode,
         "markers_train": len(markers),
         "pairs": len(all_pairs),
         "signals_oos": len(signals),
@@ -215,7 +222,8 @@ def _print(summary: dict, *, top: int = 10) -> None:
     if summary["test_end"]:
         window += f" <{summary['test_end']}"
     print(
-        f"OOS h={summary['horizon']}d train<{summary['train_end']} {window} | "
+        f"OOS h={summary['horizon']}d key={summary['key_mode']} "
+        f"train<{summary['train_end']} {window} | "
         f"маркеров {summary['markers_train']} | пар {summary['pairs']} | "
         f"сигналов {summary['signals_oos']}"
     )
@@ -337,6 +345,11 @@ if __name__ == "__main__":
     parser.add_argument("--min-credibility", type=float, default=0.0)
     parser.add_argument("--group", choices=["corporate", "macro", "other"])
     parser.add_argument(
+        "--key-mode",
+        choices=["source", "event", "group"],
+        default="source",
+    )
+    parser.add_argument(
         "--allow-fallback",
         action="store_true",
         help="use raw return when abnormal is missing",
@@ -359,6 +372,7 @@ if __name__ == "__main__":
         "min_credibility": args.min_credibility,
         "only_group": args.group,
         "require_abnormal": not args.allow_fallback,
+        "key_mode": args.key_mode,
     }
     if args.walk_forward:
         start, end, step = args.walk_forward

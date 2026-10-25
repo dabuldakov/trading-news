@@ -47,6 +47,20 @@ def source_key(source: str | None) -> str:
     return text.split(":", 1)[-1] if ":" in text else text
 
 
+def marker_key(
+    event_type: str | None,
+    sentiment: float | None,
+    source: str | None,
+    mode: str = "source",
+) -> str:
+    label = sentiment_label(sentiment)
+    if mode == "event":
+        return f"{event_type or 'other'}|{label}"
+    if mode == "group":
+        return f"{event_group(event_type)}|{label}"
+    return f"{event_type or 'other'}|{label}|{source_key(source)}"
+
+
 def event_group(event_type: str | None) -> str:
     value = (event_type or "other").strip().lower()
     for group, members in EVENT_GROUPS.items():

@@ -10,7 +10,7 @@ from trading_news.research.event_study import (
     build_markers,
     build_signals,
 )
-from trading_news.research.stats import event_group, source_key
+from trading_news.research.stats import event_group, marker_key, source_key
 
 
 def _bar(day: int, close: float, high: float | None = None, low: float | None = None):
@@ -75,6 +75,9 @@ def test_source_key_and_event_group() -> None:
     assert event_group("dividend") == "corporate"
     assert event_group("rate") == "macro"
     assert event_group("weird") == "other"
+    assert marker_key("dividend", 1, "wayback:rbc") == "dividend|pos|rbc"
+    assert marker_key("dividend", 1, "rbc", "event") == "dividend|pos"
+    assert marker_key("rate", 0, "x", "group") == "macro|neutral"
 
 
 def test_build_markers_and_signals() -> None:
