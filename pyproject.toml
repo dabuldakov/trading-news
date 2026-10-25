@@ -29,6 +29,9 @@ dev = [
   "respx>=0.21",
   "ruff>=0.6",
 ]
+bigquery = [
+  "google-cloud-bigquery>=3.25",
+]
 nlp = [
   "transformers>=4.44",
   "torch>=2.4",
