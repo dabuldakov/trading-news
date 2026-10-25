@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -9,6 +11,18 @@ from .news.ingest import ingest_all
 from .news.telegram import ingest_telegram
 from .nlp.classify import classify_pending
 from .reference.sync import sync_reference
+from .research.sector_flow import build_sector_returns
+from .research.sector_paper import paper_capture, paper_update
+
+
+def _sector_paper_tick() -> None:
+    today = date.today()
+    build_sector_returns(
+        (today - timedelta(days=7)).isoformat(),
+        today.isoformat(),
+    )
+    paper_capture(days=3)
+    paper_update()
 
 
 def build_scheduler() -> BlockingScheduler:
@@ -42,6 +56,13 @@ def build_scheduler() -> BlockingScheduler:
         classify_pending,
         IntervalTrigger(minutes=5, timezone=settings.tz),
         id="nlp",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        _sector_paper_tick,
+        CronTrigger(hour=23, minute=30, timezone=settings.tz),
+        id="sector-paper",
         max_instances=1,
         coalesce=True,
     )
