@@ -240,30 +240,32 @@ def build_reactions(limit: int | None = 500, *, rebuild: bool = False) -> int:
     with pool().connection() as conn:
         if rebuild:
             conn.execute("DELETE FROM news_reactions")
-        conn.executemany(
-            """
-            INSERT INTO news_reactions
-                (article_id, ticker, t0, ret_1d, ret_3d, ret_5d,
-                 abnormal_ret, abnormal_3d, abnormal_5d, volume_z,
-                 mfe, mae, gap, adv_rub, costs)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (article_id, ticker) DO UPDATE SET
-                t0 = EXCLUDED.t0,
-                ret_1d = EXCLUDED.ret_1d,
-                ret_3d = EXCLUDED.ret_3d,
-                ret_5d = EXCLUDED.ret_5d,
-                abnormal_ret = EXCLUDED.abnormal_ret,
-                abnormal_3d = EXCLUDED.abnormal_3d,
-                abnormal_5d = EXCLUDED.abnormal_5d,
-                volume_z = EXCLUDED.volume_z,
-                mfe = EXCLUDED.mfe,
-                mae = EXCLUDED.mae,
-                gap = EXCLUDED.gap,
-                adv_rub = EXCLUDED.adv_rub,
-                costs = EXCLUDED.costs
-            """,
-            payload,
-        )
+        with conn.cursor() as cursor:
+            cursor.executemany(
+                """
+                INSERT INTO news_reactions
+                    (article_id, ticker, t0, ret_1d, ret_3d, ret_5d,
+                     abnormal_ret, abnormal_3d, abnormal_5d, volume_z,
+                     mfe, mae, gap, adv_rub, costs)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s)
+                ON CONFLICT (article_id, ticker) DO UPDATE SET
+                    t0 = EXCLUDED.t0,
+                    ret_1d = EXCLUDED.ret_1d,
+                    ret_3d = EXCLUDED.ret_3d,
+                    ret_5d = EXCLUDED.ret_5d,
+                    abnormal_ret = EXCLUDED.abnormal_ret,
+                    abnormal_3d = EXCLUDED.abnormal_3d,
+                    abnormal_5d = EXCLUDED.abnormal_5d,
+                    volume_z = EXCLUDED.volume_z,
+                    mfe = EXCLUDED.mfe,
+                    mae = EXCLUDED.mae,
+                    gap = EXCLUDED.gap,
+                    adv_rub = EXCLUDED.adv_rub,
+                    costs = EXCLUDED.costs
+                """,
+                payload,
+            )
         conn.commit()
     return len(payload)
 
