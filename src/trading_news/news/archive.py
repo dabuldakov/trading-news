@@ -253,10 +253,22 @@ def scrape(
             continue
         if kind != "urlset":
             continue
+        month_match = re.search(r"sitemap-(\d{4})-(\d{2})\.xml$", sitemap)
+        month_fallback = None
+        if source.monthly and month_match:
+            month_fallback = datetime(
+                int(month_match.group(1)),
+                int(month_match.group(2)),
+                1,
+                tzinfo=UTC,
+            )
         found = []
         for entry in entries:
             url = entry["loc"]
             if not _match(url, source):
+                continue
+            if month_fallback is not None:
+                found.append((url, month_fallback))
                 continue
             when = _parse_time(entry["lastmod"])
             if when is None or when < start_dt or when >= end_dt:

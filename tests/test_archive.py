@@ -67,3 +67,36 @@ def test_scrape_inserts_article(monkeypatch) -> None:
         ).fetchone()
     assert row[0] == "Компания отчиталась о прибыли"
     assert row[1].endswith("/1-test")
+
+
+KOM_INDEX = b"""<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://www.kommersant.ru/sitemaps/archive/sitemap-2024-01.xml</loc></sitemap>
+</sitemapindex>"""
+
+KOM_URLSET = b"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://www.kommersant.ru/doc/1</loc>
+       <lastmod>2024-05-06T00:00:00+03:00</lastmod></url>
+</urlset>"""
+
+KOM_ARTICLE = """<html><head>
+<meta property="og:title" content="Коммерсант: новость" />
+<meta name="description" content="Лид." />
+<meta property="article:published_time" content="2024-01-01T05:16:22Z" />
+</head><body></body></html>""".encode()
+
+
+def test_monthly_sitemap_uses_month_not_bulk_lastmod(monkeypatch) -> None:
+    def fake_fetch(url: str) -> bytes:
+        if url.endswith("all_docs_sitemap.xml"):
+            return KOM_INDEX
+        if url.endswith("sitemap-2024-01.xml"):
+            return KOM_URLSET
+        return KOM_ARTICLE
+
+    monkeypatch.setattr(archive, "_fetch", fake_fetch)
+    result = archive.scrape(
+        "kommersant", "2024-01-01", "2024-01-31", limit=10, workers=1, pause=0
+    )
+    assert result["inserted"] == 1
