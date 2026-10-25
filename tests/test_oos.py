@@ -439,3 +439,26 @@ def test_portfolio_backtest_compounds_signals() -> None:
     assert result["hit"] == pytest.approx(1.0)
     assert result["max_drawdown"] == pytest.approx(0.0)
     assert result["total_return"] == pytest.approx((1 + 0.1 * 0.019) ** 4 - 1)
+
+
+def test_event_study_uses_intraday_column() -> None:
+    with pool().connection() as conn:
+        source = _source(conn, "rbc", 0.8)
+        _instrument(conn, "SBER")
+        _article(
+            conn,
+            source,
+            tag="intraday",
+            ticker="SBER",
+            published=datetime(2026, 1, 5),
+            abnormal_ret=0.02,
+        )
+        conn.execute(
+            "UPDATE news_reactions SET ret_1m = 0.001, ret_1h = 0.003"
+        )
+        conn.commit()
+
+    result = event_study(intraday="1m")
+
+    assert result["horizon"] == "1m"
+    assert result["groups"]["corporate|pos"]["mean"] == pytest.approx(0.001)

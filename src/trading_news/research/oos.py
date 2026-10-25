@@ -89,13 +89,21 @@ def event_study(
     end: str | None = None,
     require_abnormal: bool = True,
     demean_by_day: bool = False,
+    intraday: str | None = None,
 ) -> dict:
     """Средняя аномальная доходность по (группа события, знак) без торговли."""
-    if horizon not in ABNORMAL:
-        raise ValueError(f"horizon must be one of {sorted(ABNORMAL)}")
-    abnormal = f"r.{ABNORMAL[horizon]}"
-    raw = f"r.{RETURN[horizon]}"
-    expr = abnormal if require_abnormal else f"COALESCE({abnormal}, {raw})"
+    if intraday is not None:
+        if intraday not in ("1m", "5m", "30m", "1h"):
+            raise ValueError("intraday must be one of 1m/5m/30m/1h")
+        expr = f"r.ret_{intraday}"
+        horizon_label = intraday
+    else:
+        if horizon not in ABNORMAL:
+            raise ValueError(f"horizon must be one of {sorted(ABNORMAL)}")
+        abnormal = f"r.{ABNORMAL[horizon]}"
+        raw = f"r.{RETURN[horizon]}"
+        expr = abnormal if require_abnormal else f"COALESCE({abnormal}, {raw})"
+        horizon_label = horizon
     clauses = [f"{expr} IS NOT NULL"]
     params: list = []
     if start is not None:
@@ -143,7 +151,7 @@ def event_study(
             "neg_n": len(negative),
         }
     return {
-        "horizon": horizon,
+        "horizon": horizon_label,
         "start": start,
         "end": end,
         "n": len(rows),
@@ -156,8 +164,11 @@ def event_study(
 def _print_study(result: dict) -> None:
     window = f"{result['start'] or 'start'}..{result['end'] or 'now'}"
     mode = "demeaned-by-day" if result.get("demeaned") else "raw"
+    horizon_label = result["horizon"]
+    if isinstance(horizon_label, int):
+        horizon_label = f"{horizon_label}d"
     print(
-        f"EVENT STUDY h={result['horizon']}d window={window} "
+        f"EVENT STUDY h={horizon_label} window={window} "
         f"n={result['n']} ({mode})"
     )
     for key, st in sorted(
@@ -596,6 +607,11 @@ if __name__ == "__main__":
         help="report average abnormal return by event group instead of trading PnL",
     )
     parser.add_argument(
+        "--intraday",
+        choices=["1m", "5m", "30m", "1h"],
+        help="use intraday reaction column (study mode)",
+    )
+    parser.add_argument(
         "--study-demean",
         action="store_true",
         help="subtract same-day cross-sectional mean before the event study",
@@ -637,6 +653,7 @@ if __name__ == "__main__":
                 end=args.test_end,
                 require_abnormal=not args.allow_fallback,
                 demean_by_day=args.study_demean,
+                intraday=args.intraday,
             )
         )
     elif args.portfolio:
