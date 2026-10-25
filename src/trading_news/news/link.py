@@ -48,13 +48,31 @@ SECTOR_TICKERS = {
 }
 
 
-def link_external(conn, article_id: int, text: str) -> int:
+def active_tickers(conn) -> set[str]:
+    return {
+        row[0]
+        for row in conn.execute(
+            "SELECT ticker FROM instruments WHERE status = 'active'"
+        ).fetchall()
+    }
+
+
+def link_external(
+    conn,
+    article_id: int,
+    text: str,
+    active: set[str] | None = None,
+) -> int:
     lowered = (text or "").lower()
+    if active is None:
+        active = active_tickers(conn)
     linked = 0
     for sector, words in SECTOR_KEYWORDS.items():
         if not any(word in lowered for word in words):
             continue
         for ticker in SECTOR_TICKERS.get(sector, []):
+            if ticker not in active:
+                continue
             conn.execute(
                 """
                 INSERT INTO news_tickers (article_id, ticker, confidence, method)
@@ -87,6 +105,7 @@ def link_pending(limit: int = 5000, min_similarity: float = 0.55) -> int:
             """,
             (limit,),
         ).fetchall()
+        active = active_tickers(conn)
         for article_id, title, summary in articles:
             text = f"{title} {summary}".strip()
             rows = conn.execute(
@@ -138,7 +157,7 @@ def link_pending(limit: int = 5000, min_similarity: float = 0.55) -> int:
                     ),
                 )
                 linked += 1
-            sector_links = link_external(conn, article_id, text)
+            sector_links = link_external(conn, article_id, text, active)
             conn.execute(
                 "UPDATE news_articles SET status = %s WHERE id = %s",
                 ("linked" if (best or sector_links) else "skipped", article_id),

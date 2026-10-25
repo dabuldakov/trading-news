@@ -1,0 +1,3 @@
+ALTER TABLE news_reactions ADD COLUMN IF NOT EXISTS abnormal_3d REAL;
+ALTER TABLE news_reactions ADD COLUMN IF NOT EXISTS abnormal_5d REAL;
+ALTER TABLE news_reactions ADD COLUMN IF NOT EXISTS adv_rub REAL;
