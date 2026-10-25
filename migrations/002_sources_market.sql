@@ -1,0 +1,1 @@
+ALTER TABLE news_sources ADD COLUMN IF NOT EXISTS market TEXT;

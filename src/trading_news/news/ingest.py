@@ -76,10 +76,10 @@ def is_relevant(conn, text: str) -> bool:
 def _source_id(conn, source: dict) -> int:
     row = conn.execute(
         """
-        INSERT INTO news_sources (name, kind, url, credibility)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO news_sources (name, kind, url, credibility, market)
+        VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (name) DO UPDATE SET
-            url = EXCLUDED.url, kind = EXCLUDED.kind
+            url = EXCLUDED.url, kind = EXCLUDED.kind, market = EXCLUDED.market
         RETURNING id
         """,
         (
@@ -87,6 +87,7 @@ def _source_id(conn, source: dict) -> int:
             source["kind"],
             source.get("url"),
             source.get("credibility", 0.5),
+            source.get("market"),
         ),
     ).fetchone()
     return int(row[0])
