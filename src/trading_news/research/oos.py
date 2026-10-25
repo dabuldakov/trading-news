@@ -29,6 +29,11 @@ def _label(sentiment: float) -> str:
     return "neutral"
 
 
+def _source_key(source: str | None) -> str:
+    text = (source or "unknown").strip()
+    return text.split(":", 1)[-1] if ":" in text else text
+
+
 def _stats(values: list[float]) -> dict:
     if not values:
         return {"n": 0, "mean": 0.0, "t": 0.0, "hit": 0.0}
@@ -59,7 +64,7 @@ def _train_markers(conn, train_end: str) -> dict[str, dict]:
     ).fetchall()
     groups: dict[str, list[float]] = {}
     for event_type, sentiment, source, reaction in rows:
-        key = f"{event_type}|{_label(sentiment)}|{source or 'unknown'}"
+        key = f"{event_type}|{_label(sentiment)}|{_source_key(source)}"
         groups.setdefault(key, []).append(float(reaction))
     return {key: _stats(values) for key, values in groups.items()}
 
@@ -91,7 +96,7 @@ def evaluate(
     results: list[dict] = []
     all_pairs: list[dict] = []
     for _published, ticker, event_type, sentiment, source, ret_1d, abnormal in rows:
-        key = f"{event_type}|{_label(sentiment)}|{source or 'unknown'}"
+        key = f"{event_type}|{_label(sentiment)}|{_source_key(source)}"
         marker = markers.get(key)
         if marker is None or marker["n"] < MIN_MARKER_N:
             continue
@@ -103,7 +108,7 @@ def evaluate(
         all_pairs.append(
             {
                 "marker": key,
-                "source": source or "unknown",
+                "source": _source_key(source),
                 "ticker": ticker,
                 "side": side,
                 "reaction": float(reaction),
@@ -116,7 +121,7 @@ def evaluate(
         results.append(
             {
                 "marker": key,
-                "source": source or "unknown",
+                "source": _source_key(source),
                 "ticker": ticker,
                 "side": side,
                 "reaction": float(reaction),
