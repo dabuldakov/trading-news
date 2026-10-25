@@ -25,6 +25,46 @@ GENERIC = {
 }
 
 
+
+SECTOR_KEYWORDS = {
+    "oil": {"oil", "brent", "wti", "crude", "opec", "нефт"},
+    "gas": {"gas", "lng", "газ"},
+    "gold": {"gold", "золот"},
+    "metals": {"copper", "nickel", "aluminium", "aluminum", "steel", "мед", "никел", "стал"},
+    "china": {"china", "chinese", "китай"},
+    "rates": {"fed", "fomc", "ecb", "rate hike", "rate cut", "ставк"},
+}
+
+SECTOR_TICKERS = {
+    "oil": ["GAZP", "ROSN", "LKOH", "NVTK", "TATN", "SNGS", "SNGSP"],
+    "gas": ["GAZP", "NVTK"],
+    "gold": ["PLZL", "GMKN"],
+    "metals": ["GMKN", "NLMK", "MAGN", "CHMF", "RUAL", "ALRS"],
+    "china": ["RUAL", "PLZL", "GMKN", "MOEX"],
+    "rates": ["SBER", "VTBR", "MOEX"],
+}
+
+
+def link_external(conn, article_id: int, text: str) -> int:
+    lowered = (text or "").lower()
+    linked = 0
+    for sector, words in SECTOR_KEYWORDS.items():
+        if not any(word in lowered for word in words):
+            continue
+        for ticker in SECTOR_TICKERS.get(sector, []):
+            conn.execute(
+                """
+                INSERT INTO news_tickers (article_id, ticker, confidence, method)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (article_id, ticker) DO UPDATE SET
+                    confidence = GREATEST(news_tickers.confidence, EXCLUDED.confidence)
+                """,
+                (article_id, ticker, 0.5, f"sector:{sector}"),
+            )
+            linked += 1
+    return linked
+
+
 def link_pending(limit: int = 5000, min_similarity: float = 0.55) -> int:
     """Связать новые статьи с тикерами по алиасам компаний.
 
