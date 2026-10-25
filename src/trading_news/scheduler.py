@@ -21,8 +21,9 @@ def _sector_paper_tick() -> None:
         (today - timedelta(days=7)).isoformat(),
         today.isoformat(),
     )
-    paper_capture(days=3)
-    paper_update()
+    for horizon in (1, 3, 5):
+        paper_capture(days=3, horizon=horizon)
+        paper_update(horizon=horizon)
 
 
 def build_scheduler() -> BlockingScheduler:
