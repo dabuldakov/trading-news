@@ -135,9 +135,10 @@ def link_pending(limit: int = 5000, min_similarity: float = 0.55) -> int:
                     ),
                 )
                 linked += 1
+            sector_links = link_external(conn, article_id, text)
             conn.execute(
                 "UPDATE news_articles SET status = %s WHERE id = %s",
-                ("linked" if best else "skipped", article_id),
+                ("linked" if (best or sector_links) else "skipped", article_id),
             )
         conn.commit()
     return linked
