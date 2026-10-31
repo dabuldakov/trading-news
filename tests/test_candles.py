@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from trading_news.candles import ensure, latest, load, save
+from trading_news.db import pool
 
 
 def _ts(day: int) -> datetime:
@@ -47,6 +48,12 @@ def test_ensure_does_not_refetch_cached_range() -> None:
 
 def test_ensure_fetches_only_new_tail() -> None:
     save("TEST3", "1d", [_bar(1, 100.0), _bar(2, 101.0)], source="test")
+    with pool().connection() as conn:
+        conn.execute(
+            "UPDATE market_candles SET fetched_at = now() - interval '2 hours' "
+            "WHERE ticker = 'TEST3'"
+        )
+        conn.commit()
     calls: list[tuple[datetime, datetime]] = []
 
     def fetch(start, end):

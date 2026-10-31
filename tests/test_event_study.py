@@ -632,3 +632,28 @@ def test_build_signals_marks_recent_consistency_validated() -> None:
         ).fetchone()
     assert count == 13
     assert all_valid is True
+
+
+@respx.mock
+def test_cached_candles_preserve_moscow_time() -> None:
+    route = respx.get(
+        url__regex=r".*/shares/boards/TQBR/securities/SBER/candles\.json"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "candles": {
+                    "columns": CANDLE_COLUMNS,
+                    "data": [
+                        [99.0, 100.0, 101.0, 98.0, 500.0, 10.0,
+                         "2026-01-05 10:00:00", "2026-01-05 18:39:59"],
+                    ],
+                }
+            },
+        )
+    )
+    first = _candles("SBER", "TQBR", "2026-01-05", "2026-01-05")
+    second = _candles("SBER", "TQBR", "2026-01-05", "2026-01-05")
+    assert route.call_count == 1
+    assert first[0]["begin"] == datetime(2026, 1, 5, 10, 0)
+    assert second == first

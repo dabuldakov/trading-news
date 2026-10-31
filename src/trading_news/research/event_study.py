@@ -114,26 +114,36 @@ def _candles(
     interval: int = 24,
 ) -> list[dict]:
     """Read the persistent daily cache and fetch only missing ranges."""
-    start_dt = datetime.fromisoformat(start)
-    end_dt = datetime.fromisoformat(end)
+    msk = ZoneInfo("Europe/Moscow")
+    start_dt = datetime.fromisoformat(start).replace(tzinfo=msk)
+    end_dt = datetime.fromisoformat(end).replace(
+        hour=23, minute=59, second=59, tzinfo=msk
+    )
     timeframe = "1d" if interval == 24 else f"{interval}m"
-    rows = ensure_candles(
-        secid,
-        timeframe,
-        start_dt,
-        end_dt,
-        lambda begin, finish: _fetch_candles(
+    def fetch(begin, finish):
+        bars = _fetch_candles(
             secid,
             board,
             begin.date().isoformat(),
             finish.date().isoformat(),
             market=market,
             interval=interval,
-        ),
+        )
+        # ISS returns naive Moscow-local timestamps.  Make that explicit before
+        # the cache normalizes them to UTC.
+        for bar in bars:
+            bar["ts"] = bar["begin"].replace(tzinfo=msk)
+        return bars
+
+    rows = ensure_candles(
+        secid,
+        timeframe,
+        start_dt,
+        end_dt,
+        fetch,
         source="moex_iss",
         overlap=timedelta(days=3),
     )
-    msk = ZoneInfo("Europe/Moscow")
     return [
         {
             "begin": row["ts"].astimezone(msk).replace(tzinfo=None),

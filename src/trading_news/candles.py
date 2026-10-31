@@ -25,6 +25,19 @@ def _aware(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
+def _from_db_row(row) -> dict:
+    ts, open_, high, low, close, volume, value = row
+    return {
+        "ts": ts,
+        "open": open_,
+        "high": high,
+        "low": low,
+        "close": close,
+        "volume": volume,
+        "value": value,
+    }
+
+
 def _row(item: dict) -> dict:
     ts = item.get("ts", item.get("begin"))
     if isinstance(ts, (int, float)):
@@ -59,18 +72,7 @@ def load(
             """,
             (_profile(), ticker, timeframe, start, end),
         ).fetchall()
-    return [
-        {
-            "ts": ts,
-            "open": open_,
-            "high": high,
-            "low": low,
-            "close": close,
-            "volume": volume,
-            "value": value,
-        }
-        for ts, open_, high, low, close, volume, value in rows
-    ]
+    return [_from_db_row(row) for row in rows]
 
 
 def save(
@@ -147,10 +149,24 @@ def ensure(
 
     min_ts = min(row["ts"] for row in cached)
     max_ts = max(row["ts"] for row in cached)
+    with pool().connection() as conn:
+        last_fetch = conn.execute(
+            """
+            SELECT max(fetched_at) FROM market_candles
+            WHERE profile = %s AND ticker = %s AND timeframe = %s
+            """,
+            (_profile(), ticker, timeframe),
+        ).fetchone()[0]
     ranges: list[tuple[datetime, datetime]] = []
-    if start < min_ts:
+    fresh = (
+        last_fetch is not None
+        and datetime.now(UTC) - last_fetch < timedelta(hours=1)
+    )
+    # A daily bar can be later than midnight; don't refetch that small edge
+    # every time while the cache was just refreshed.
+    if start < min_ts and not (fresh and min_ts - start < timedelta(days=2)):
         ranges.append((start, min_ts - timedelta(seconds=1)))
-    if end > max_ts:
+    if end > max_ts and not fresh:
         overlap = overlap or timedelta(0)
         ranges.append((max_ts - overlap, end))
     for begin, finish in ranges:
@@ -181,18 +197,7 @@ def latest(
             """,
             (_profile(), ticker, timeframe, limit),
         ).fetchall()
-    cached = [
-        {
-            "ts": ts,
-            "open": open_,
-            "high": high,
-            "low": low,
-            "close": close,
-            "volume": volume,
-            "value": value,
-        }
-        for ts, open_, high, low, close, volume, value in reversed(rows)
-    ]
+    cached = [_from_db_row(row) for row in reversed(rows)]
     fresh = bool(cached) and (
         max_age is None
         or datetime.now(UTC) - max(row["ts"] for row in cached) <= max_age
