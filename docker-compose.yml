@@ -42,6 +42,11 @@ services:
     build: .
     command: ["python", "-m", "trading_news.worker"]
     env_file: .env
+    environment:
+      HTTP_PROXY: "http://172.19.0.1:1080"
+      HTTPS_PROXY: "http://172.19.0.1:1080"
+      ALL_PROXY: "http://172.19.0.1:1080"
+      NO_PROXY: "localhost,127.0.0.1,postgres,news-postgres,news-api,172.19.0.0/16"
     depends_on:
       postgres:
         condition: service_healthy

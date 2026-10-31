@@ -219,3 +219,49 @@ def test_link_pending_fast_links_exact_aliases() -> None:
     assert {"SBER", "SBERP"} <= linked
     assert statuses[first] == "linked"
     assert statuses[second] == "skipped"
+
+
+def test_alias_matching_rejects_substrings() -> None:
+    from trading_news.news.link import _alias_hit
+
+    assert not _alias_hit("UPS Raises Sales Outlook Ahead of Holiday Season", "HEAD")
+    assert not _alias_hit("Wells Fargo Head of Central Banking", "HEAD")
+    assert _alias_hit("$HEAD: HeadHunter reports results", "HEAD")
+    assert not _alias_hit("Global carmakers search for new China strategy", "CARM")
+    assert not _alias_hit("China’s battery factories are positive", "POSI")
+    assert not _alias_hit("В аэропортах отменили ограничения, самолетов нет", "Самолет")
+    assert not _alias_hit(
+        "Самолет Ереван - Минеральные Воды подал сигнал тревоги после вылета",
+        "Самолет",
+    )
+    assert _alias_hit("ГК Самолет отчиталась о росте выручки", "Самолет")
+    assert not _alias_hit("Полковник выступил за отставку Макрона", "Акрон")
+
+
+def test_alias_matching_keeps_russian_cases() -> None:
+    from trading_news.news.link import _alias_hit
+
+    assert _alias_hit("Сбербанк выплатит дивиденды", "Сбербанк")
+    assert _alias_hit("Дивиденды Сбербанка выросли", "Сбербанк")
+
+
+def test_sector_keywords_use_word_boundaries() -> None:
+    from trading_news.news.link import SECTOR_KEYWORDS, _has_keyword
+
+    assert not _has_keyword("Полковник выступил за отставку Макрона", "ставк")
+    assert not _has_keyword("В компании осталось АО Тандер", "сталь")
+    assert _has_keyword("Цены на нефть выросли", "нефть")
+    assert "china" not in SECTOR_KEYWORDS
+
+
+def test_link_is_valid_rechecks_old_signals() -> None:
+    from trading_news.news.link import link_is_valid
+
+    assert not link_is_valid(
+        "UPS Raises Sales Outlook Ahead of Holiday Season", "HEAD", "exact", ["HEAD"]
+    )
+    assert link_is_valid("Сбербанк выплатит дивиденды", "SBER", "exact", ["Сбербанк"])
+    assert not link_is_valid(
+        "Полковник выступил за отставку Макрона", "SBER", "sector:rates"
+    )
+    assert link_is_valid("Цены на нефть выросли", "GAZP", "sector:oil")

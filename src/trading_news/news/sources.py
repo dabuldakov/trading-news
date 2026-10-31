@@ -1,4 +1,6 @@
-"""Free Russian financial/economy sources. RSS first; GDELT/Telegram later."""
+"""Free financial/economy sources, split into isolated market profiles."""
+
+import os
 
 SOURCES: list[dict] = [
     {
@@ -37,6 +39,24 @@ SOURCES: list[dict] = [
         "kind": "rss",
         "url": "https://www.interfax.ru/rss.asp",
         "credibility": 0.85,
+    },
+    {
+        "name": "business_gazeta",
+        "kind": "rss",
+        "url": "https://www.business-gazeta.ru/rss.xml",
+        "credibility": 0.65,
+    },
+    {
+        "name": "finmarket",
+        "kind": "rss",
+        "url": "https://www.finmarket.ru/rss/mainnews.asp",
+        "credibility": 0.8,
+    },
+    {
+        "name": "vz",
+        "kind": "rss",
+        "url": "https://vz.ru/rss.xml",
+        "credibility": 0.55,
     },
     {
         "name": "prime",
@@ -81,6 +101,18 @@ SOURCES: list[dict] = [
         "credibility": 0.7,
     },
     {
+        "name": "forbes",
+        "kind": "rss",
+        "url": "https://www.forbes.ru/newrss.xml",
+        "credibility": 0.75,
+    },
+    {
+        "name": "bfm",
+        "kind": "rss",
+        "url": "https://www.bfm.ru/news.rss",
+        "credibility": 0.65,
+    },
+    {
         "name": "bcsexpress",
         "kind": "rss",
         "url": "https://bcs-express.ru/rss",
@@ -109,6 +141,7 @@ SOURCES: list[dict] = [
         "kind": "rss",
         "url": "https://cointelegraph.com/rss",
         "credibility": 0.6,
+        "lang": "en",
         "market": "crypto",
     },
     {
@@ -116,6 +149,7 @@ SOURCES: list[dict] = [
         "kind": "rss",
         "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
         "credibility": 0.65,
+        "lang": "en",
         "market": "crypto",
     },
     {
@@ -123,6 +157,7 @@ SOURCES: list[dict] = [
         "kind": "rss",
         "url": "https://decrypt.co/feed",
         "credibility": 0.55,
+        "lang": "en",
         "market": "crypto",
     },
     {
@@ -130,6 +165,7 @@ SOURCES: list[dict] = [
         "kind": "rss",
         "url": "https://www.theblock.co/rss.xml",
         "credibility": 0.65,
+        "lang": "en",
         "market": "crypto",
     },
     {
@@ -217,3 +253,32 @@ SOURCES: list[dict] = [
         "market": "external",
     },
 ]
+# Russian-market allowlist.  Generic global/aggregator feeds were removed:
+# they produced broad articles and false ticker links for MOEX.
+RUSSIAN_SOURCES = {
+    "cbr",
+    "rbc",
+    "vedomosti",
+    "kommersant",
+    "tass",
+    "interfax",
+    "business_gazeta",
+    "finmarket",
+    "vz",
+    "finam",
+    "bfm",
+    "frankmedia",
+    "moex_news",
+    "ria",
+}
+
+CRYPTO_SOURCES = {
+    "cointelegraph",
+    "coindesk",
+    "decrypt",
+    "theblock",
+}
+
+_PROFILE = os.getenv("NEWS_PROFILE", "ru").strip().lower()
+_ALLOWED = CRYPTO_SOURCES if _PROFILE == "crypto" else RUSSIAN_SOURCES
+SOURCES = [source for source in SOURCES if source["name"] in _ALLOWED]

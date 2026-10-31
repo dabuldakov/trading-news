@@ -22,6 +22,7 @@ import httpx
 
 from ..config import settings
 from ..db import pool
+from ..status import mark_stage
 from .stats import marker_key, sentiment_label, source_key
 from .stats import stats as marker_stats
 
@@ -29,11 +30,21 @@ logger = logging.getLogger(__name__)
 
 HORIZONS = (1, 3, 5)
 COST = 0.001  # 10 bp round trip (commission + spread estimate)
+PROFILE_COST = {"ru": 0.001, "crypto": 0.002}
+PROFILE_MIN_EDGE = {"ru": 0.001, "crypto": 0.003}
 MIN_MARKER_N = 5
 FORWARD_DAYS = 40
 PAGE = 500
 INTRADAY_HORIZONS = (1, 5, 30, 60)
 INTRADAY_DAYS = 120
+
+
+def _profile_cost() -> float:
+    return PROFILE_COST.get(settings.news_profile, COST)
+
+
+def _profile_min_edge() -> float:
+    return PROFILE_MIN_EDGE.get(settings.news_profile, 0.001)
 
 
 def _candles(
@@ -238,7 +249,7 @@ def build_reactions(
                     result["mae"],
                     result["gap"],
                     result["adv_rub"],
-                    COST,
+                    _profile_cost(),
                 )
             )
         if number % 20 == 0:
@@ -276,6 +287,10 @@ def build_reactions(
                 payload,
             )
         conn.commit()
+    try:
+        mark_stage("reactions", "ok", f"reactions={len(payload)}")
+    except Exception:  # noqa: BLE001
+        pass
     return len(payload)
 
 
@@ -396,7 +411,7 @@ def build_markers() -> int:
             FROM news_reactions r
             JOIN news_analysis n ON n.article_id = r.article_id
             JOIN news_articles a ON a.id = r.article_id
-            LEFT JOIN news_sources s ON s.id = a.source_id
+            JOIN news_sources s ON s.id = a.source_id AND s.enabled
             WHERE COALESCE(r.abnormal_ret, r.ret_1d) IS NOT NULL
             """
         ).fetchall()
@@ -444,6 +459,10 @@ def build_markers() -> int:
             )
             written += 1
         conn.commit()
+    try:
+        mark_stage("markers", "ok", f"markers={written}")
+    except Exception:  # noqa: BLE001 - monitoring must not break research
+        pass
     return written
 
 
@@ -471,30 +490,110 @@ def _recent_markers(days: int) -> dict[str, dict]:
 
 def build_signals(
     limit: int = 500,
-    min_edge: float = 0.001,
+    min_edge: float | None = None,
     *,
     min_t: float = 2.0,
     recent_days: int = 180,
     min_recent_n: int = 10,
     min_recent_t: float = 2.0,
+    stats: dict | None = None,
+    watermark: bool = False,
+    max_tickers: int = 5,
+    min_link_confidence: float = 0.9,
+    allow_other: bool = False,
+    min_relevance: float | None = None,
 ) -> int:
+    cost = _profile_cost()
+    if min_edge is None:
+        min_edge = _profile_min_edge()
+    if stats is not None:
+        stats.update(
+            {
+                "articles_scanned": 0,
+                "batch_articles": 0,
+                "new_articles": 0,
+                "unsignaled_articles": 0,
+                "signals_written": 0,
+                "signals_created": 0,
+                "signals_updated": 0,
+                "validated": 0,
+                "validated_created": 0,
+                "watermark_last_id": 0,
+                "skipped_other": 0,
+                "skipped_tickers": 0,
+                "skipped_link": 0,
+                "skipped_relevance": 0,
+            }
+        )
+    batch_size = max(1, int(limit))
     recent = _recent_markers(recent_days)
     with pool().connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT a.id, t.ticker, n.event_type, n.sentiment, s.name AS source,
-                   r.abnormal_ret
-            FROM news_articles a
-            JOIN news_tickers t ON t.article_id = a.id
-            JOIN news_analysis n ON n.article_id = a.id
-            LEFT JOIN news_sources s ON s.id = a.source_id
-            LEFT JOIN news_reactions r
-              ON r.article_id = a.id AND r.ticker = t.ticker
-            ORDER BY a.published_at DESC
-            LIMIT %s
-            """,
-            (limit,),
-        ).fetchall()
+        last_id: int | None = None
+        watermark_last = 0
+        if watermark:
+            row = conn.execute(
+                "SELECT last_article_id FROM signal_watermark WHERE name = 'signals'"
+            ).fetchone()
+            if row:
+                last_id = int(row[0])
+
+        new_ids: list[int] = []
+        if watermark and last_id is not None:
+            cursor = last_id
+            while True:
+                batch = [
+                    int(row[0])
+                    for row in conn.execute(
+                        "SELECT id FROM news_articles WHERE id > %s "
+                        "ORDER BY id LIMIT %s",
+                        (cursor, batch_size),
+                    ).fetchall()
+                ]
+                if not batch:
+                    break
+                new_ids.extend(batch)
+                cursor = batch[-1]
+                if len(batch) < batch_size:
+                    break
+            watermark_last = max(new_ids) if new_ids else last_id
+
+        latest_ids = [
+            int(row[0])
+            for row in conn.execute(
+                "SELECT id FROM news_articles "
+                "ORDER BY published_at DESC, id DESC LIMIT %s",
+                (batch_size,),
+            ).fetchall()
+        ]
+        article_ids = sorted(set(new_ids + latest_ids))
+        if watermark and last_id is None:
+            watermark_last = int(
+                conn.execute(
+                    "SELECT COALESCE(max(id), 0) FROM news_articles"
+                ).fetchone()[0]
+            )
+
+        rows = []
+        if article_ids:
+            rows = conn.execute(
+                """
+                SELECT a.id, t.ticker, n.event_type, n.sentiment, s.name AS source,
+                       r.abnormal_ret, t.confidence AS link_confidence,
+                       t.relevance,
+                       (SELECT count(*) FROM news_tickers t2
+                         WHERE t2.article_id = a.id) AS ticker_count
+                FROM news_articles a
+                JOIN news_tickers t ON t.article_id = a.id
+                JOIN news_analysis n ON n.article_id = a.id
+                JOIN news_sources s ON s.id = a.source_id AND s.enabled
+                LEFT JOIN news_reactions r
+                  ON r.article_id = a.id AND r.ticker = t.ticker
+                WHERE a.id = ANY(%s)
+                ORDER BY a.id, t.ticker
+                """,
+                (article_ids,),
+            ).fetchall()
+
         markers = {
             row[0]: row
             for row in conn.execute(
@@ -502,8 +601,52 @@ def build_signals(
             ).fetchall()
         }
 
+        row_article_ids = {int(row[0]) for row in rows}
+        existing_articles: set[int] = set()
+        if article_ids:
+            existing_articles = {
+                int(row[0])
+                for row in conn.execute(
+                    "SELECT DISTINCT article_id FROM signals "
+                    "WHERE article_id = ANY(%s)",
+                    (article_ids,),
+                ).fetchall()
+            }
+
         written = 0
-        for article_id, ticker, event_type, sentiment, source, _abnormal in rows:
+        created = 0
+        updated = 0
+        validated_total = 0
+        validated_created = 0
+        skipped_other = 0
+        skipped_tickers = 0
+        skipped_link = 0
+        skipped_relevance = 0
+        for (
+            article_id,
+            ticker,
+            event_type,
+            sentiment,
+            source,
+            _abnormal,
+            link_confidence,
+            relevance,
+            ticker_count,
+        ) in rows:
+            if not allow_other and event_type == "other":
+                skipped_other += 1
+                continue
+            if int(ticker_count or 0) > max_tickers:
+                skipped_tickers += 1
+                continue
+            if float(link_confidence or 0.0) < min_link_confidence:
+                skipped_link += 1
+                continue
+            if min_relevance is not None and (
+                relevance is None or float(relevance) < min_relevance
+            ):
+                skipped_relevance += 1
+                continue
             key = marker_key(event_type, sentiment, source)
             marker = markers.get(key)
             if marker is None:
@@ -511,7 +654,7 @@ def build_signals(
             _key, mean, t_stat, n = marker
             if n < MIN_MARKER_N or abs(float(t_stat)) < min_t:
                 continue
-            edge = float(mean) - COST
+            edge = float(mean) - cost
             if abs(edge) < min_edge:
                 continue
             side = "buy" if edge > 0 else "sell"
@@ -522,22 +665,70 @@ def build_signals(
                 and recent_marker["n"] >= min_recent_n
                 and abs(recent_marker["t"]) >= min_recent_t
                 and (recent_marker["mean"] > 0) == (mean > 0)
-                and abs(recent_marker["mean"] - COST) >= min_edge
+                and abs(recent_marker["mean"] - cost) >= min_edge
             )
+            inserted = bool(
+                conn.execute(
+                    """
+                    INSERT INTO signals
+                        (article_id, ticker, side, expected_edge, confidence,
+                         horizon, marker_key, validated)
+                    VALUES (%s, %s, %s, %s, %s, '1d', %s, %s)
+                    ON CONFLICT (article_id, ticker, side) DO UPDATE SET
+                        expected_edge = EXCLUDED.expected_edge,
+                        confidence = EXCLUDED.confidence,
+                        marker_key = EXCLUDED.marker_key,
+                        validated = EXCLUDED.validated
+                    RETURNING (xmax = 0)
+                    """,
+                    (article_id, ticker, side, edge, confidence, key, validated),
+                ).fetchone()[0]
+            )
+            created += int(inserted)
+            updated += int(not inserted)
+            if validated:
+                validated_total += 1
+                validated_created += int(inserted)
+            written += 1
+
+        if watermark and article_ids:
             conn.execute(
                 """
-                INSERT INTO signals
-                    (article_id, ticker, side, expected_edge, confidence,
-                     horizon, marker_key, validated)
-                VALUES (%s, %s, %s, %s, %s, '1d', %s, %s)
-                ON CONFLICT (article_id, ticker, side) DO UPDATE SET
-                    expected_edge = EXCLUDED.expected_edge,
-                    confidence = EXCLUDED.confidence,
-                    marker_key = EXCLUDED.marker_key,
-                    validated = EXCLUDED.validated
+                INSERT INTO signal_watermark (name, last_article_id, updated_at)
+                VALUES ('signals', %s, now())
+                ON CONFLICT (name) DO UPDATE SET
+                    last_article_id = GREATEST(
+                        signal_watermark.last_article_id,
+                        EXCLUDED.last_article_id
+                    ),
+                    updated_at = now()
                 """,
-                (article_id, ticker, side, edge, confidence, key, validated),
+                (watermark_last,),
             )
-            written += 1
         conn.commit()
+
+    try:
+        mark_stage("signals", "ok", f"signals={written}")
+    except Exception:  # noqa: BLE001 - monitoring must not break research
+        pass
+
+    if stats is not None:
+        stats.update(
+            {
+                "articles_scanned": len(article_ids),
+                "batch_articles": len(row_article_ids),
+                "new_articles": len(new_ids),
+                "unsignaled_articles": len(row_article_ids - existing_articles),
+                "signals_written": written,
+                "signals_created": created,
+                "signals_updated": updated,
+                "validated": validated_total,
+                "validated_created": validated_created,
+                "watermark_last_id": watermark_last,
+                "skipped_other": skipped_other,
+                "skipped_tickers": skipped_tickers,
+                "skipped_link": skipped_link,
+                "skipped_relevance": skipped_relevance,
+            }
+        )
     return written

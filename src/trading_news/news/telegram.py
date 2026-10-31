@@ -12,23 +12,56 @@ from datetime import UTC, datetime
 import httpx
 from bs4 import BeautifulSoup
 
+from ..config import settings
 from ..db import pool
 from .ingest import article_hash
 
 logger = logging.getLogger(__name__)
 
-CHANNELS: list[tuple[str, str]] = [
+CRYPTO_CHANNELS: list[tuple[str, str]] = [
+    ("forklog", "ForkLog"),
+    ("incrypted", "Incrypted"),
+    ("unfolded", "Unfolded"),
+    ("decenter", "DeCenter"),
+    ("cryp2day", "Cryp2day"),
+    ("defimillion", "DeFi Million"),
+    ("investigations", "ZachXBT"),
+    ("binance_announcements", "Binance Announcements"),
+    ("WatcherGuru", "Watcher Guru"),
+    ("whale_alert_io", "Whale Alert"),
+    ("wublockchainenglish", "Wu Blockchain News"),
+    ("CoinMarketCapAnnouncements", "CoinMarketCap Announcements"),
+    ("Bybit_Announcements", "Bybit Announcements"),
+]
+
+RUSSIAN_CHANNELS: list[tuple[str, str]] = [
     ("markettwits", "MarketTwits"),
     ("rbc_news", "РБК"),
-    ("interfax_online", "Интерфакс"),
     ("vedomosti", "Ведомости"),
     ("kommersant", "Коммерсантъ"),
-    ("cbrf_official", "Банк России"),
-    ("moex_ru", "MOEX"),
-    ("bcsexpress", "BCS Express"),
-    ("finam_ru", "Финам"),
-    ("smartlab", "Smart-Lab"),
+    ("minpromtorg_ru", "Минпромторг России"),
+    ("rostecru", "Ростех"),
+    ("mash_tech", "МашТех"),
+    ("eprussia", "Энергетика и промышленность России"),
+    ("government_rus", "Правительство России"),
+    ("minec_russia", "Минэкономразвития России"),
+    ("MoscowEcon", "Экономика Москвы"),
+    ("minfin", "Минфин России"),
+    ("centralbank_russia", "Банк России"),
 ]
+
+CHANNELS: list[tuple[str, str]] = (
+    CRYPTO_CHANNELS if settings.news_profile == "crypto" else RUSSIAN_CHANNELS
+)
+CHANNEL_LANG = {
+    "investigations": "en",
+    "binance_announcements": "en",
+    "WatcherGuru": "en",
+    "whale_alert_io": "en",
+    "wublockchainenglish": "en",
+    "CoinMarketCapAnnouncements": "en",
+    "Bybit_Announcements": "en",
+}
 
 
 def parse_channel(html: str, channel: str) -> list[dict]:
@@ -98,7 +131,7 @@ def ingest_telegram() -> dict:
                         INSERT INTO news_articles
                             (source_id, url, title, summary, published_at,
                              lang, hash)
-                        VALUES (%s, %s, %s, %s, %s, 'ru', %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (hash) DO NOTHING
                         RETURNING id
                         """,
@@ -108,6 +141,7 @@ def ingest_telegram() -> dict:
                             item["title"],
                             item["summary"],
                             item["published_at"],
+                            CHANNEL_LANG.get(channel, "ru"),
                             item["hash"],
                         ),
                     ).fetchone()

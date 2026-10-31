@@ -118,7 +118,7 @@ def backfill_wayback(
                         INSERT INTO news_articles
                             (source_id, url, title, summary, published_at,
                              lang, hash)
-                        VALUES (%s, %s, %s, %s, %s, 'ru', %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (hash) DO NOTHING
                         RETURNING id
                         """,
@@ -128,6 +128,7 @@ def backfill_wayback(
                             item["title"],
                             item["summary"],
                             item["published_at"],
+                            source.get("lang", "ru"),
                             item["hash"],
                         ),
                     ).fetchone()

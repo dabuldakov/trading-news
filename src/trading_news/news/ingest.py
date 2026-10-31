@@ -114,7 +114,7 @@ def ingest_source(source: dict, client: httpx.Client | None = None) -> int:
         for item in items:
             if (
                 not source.get("macro")
-                and source.get("market") != "external"
+                and source.get("market") not in ("external", "crypto")
                 and not is_relevant(
                     conn, f"{item['title']} {item['summary']}"
                 )
@@ -125,7 +125,7 @@ def ingest_source(source: dict, client: httpx.Client | None = None) -> int:
                 """
                 INSERT INTO news_articles
                     (source_id, url, title, summary, published_at, lang, hash)
-                VALUES (%s, %s, %s, %s, %s, 'ru', %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (hash) DO NOTHING
                 RETURNING id
                 """,
@@ -135,6 +135,7 @@ def ingest_source(source: dict, client: httpx.Client | None = None) -> int:
                     item["title"],
                     item["summary"],
                     item["published_at"],
+                    source.get("lang", "ru"),
                     item["hash"],
                 ),
             ).fetchone()

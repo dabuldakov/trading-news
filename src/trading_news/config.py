@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     database_url: str = "postgresql://news:news@127.0.0.1:5433/news"
     service_key: str = ""
+    news_profile: str = "ru"
 
     main_api_url: str = ""
     main_service_key: str = ""
@@ -16,6 +17,7 @@ class Settings(BaseSettings):
     tz: str = "Europe/Moscow"
 
     news_interval_sec: int = 3600
+    signals_include_unvalidated: bool = False
     reference_cron_hour: int = 7
     reference_cron_minute: int = 30
     migrations_dir: str = "migrations"

@@ -34,28 +34,35 @@ def migrate() -> list[str]:
     """Apply SQL migrations from ``migrations_dir`` once each."""
     applied: list[str] = []
     with pool().connection() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS schema_migrations (
-                version TEXT PRIMARY KEY,
-                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-            )
-            """
-        )
-        conn.commit()
-        done = {
-            row[0]
-            for row in conn.execute("SELECT version FROM schema_migrations").fetchall()
-        }
-        for path in sorted(Path(settings.migrations_dir).glob("*.sql")):
-            if path.name in done:
-                continue
-            logger.info("applying migration %s", path.name)
-            with conn.transaction():
-                conn.execute(path.read_text())
-                conn.execute(
-                    "INSERT INTO schema_migrations (version) VALUES (%s)",
-                    (path.name,),
+        conn.execute("SELECT pg_advisory_lock(hashtext('trading_news_migrations'))")
+        try:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version TEXT PRIMARY KEY,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
                 )
-            applied.append(path.name)
+                """
+            )
+            conn.commit()
+            done = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT version FROM schema_migrations"
+                ).fetchall()
+            }
+            for path in sorted(Path(settings.migrations_dir).glob("*.sql")):
+                if path.name in done:
+                    continue
+                logger.info("applying migration %s", path.name)
+                with conn.transaction():
+                    conn.execute(path.read_text())
+                    conn.execute(
+                        "INSERT INTO schema_migrations (version) VALUES (%s)",
+                        (path.name,),
+                    )
+                applied.append(path.name)
+        finally:
+            conn.execute("SELECT pg_advisory_unlock(hashtext('trading_news_migrations'))")
+            conn.commit()
     return applied

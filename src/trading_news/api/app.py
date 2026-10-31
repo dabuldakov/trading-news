@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 
 from ..config import settings
 from ..db import close_pool, migrate, pool
+from ..status import snapshot as status_snapshot
 
 
 @asynccontextmanager
@@ -33,6 +34,11 @@ def _rows(conn, query: str, params: tuple | None = None) -> list[dict]:
         return [
             dict(zip(columns, row, strict=True)) for row in cursor.fetchall()
         ]
+
+
+@app.get("/status")
+def status() -> dict:
+    return status_snapshot()
 
 
 @app.get("/health")
@@ -118,22 +124,53 @@ def news(since: str | None = None, limit: int = 50) -> dict:
 def signals(
     since: str | None = None,
     limit: int = 100,
-    include_unvalidated: bool = False,
+    include_unvalidated: bool = settings.signals_include_unvalidated,
 ) -> dict:
     with pool().connection() as conn:
         rows = _rows(
             conn,
             """
-            SELECT id, article_id, ticker, side, expected_edge, confidence,
-                   horizon, marker_key, validated, created_at
-            FROM signals
-            WHERE (%s::timestamptz IS NULL OR created_at >= %s::timestamptz)
-              AND (%s OR validated)
-            ORDER BY created_at DESC
+            SELECT s.id, s.article_id, s.ticker, s.side, s.expected_edge,
+                   s.confidence, s.horizon, s.marker_key, s.validated,
+                   s.created_at,
+                   a.title, a.url, a.published_at,
+                   COALESCE(NULLIF(a.summary, ''), left(a.body, 500)) AS summary,
+                   src.name AS source,
+                   n.event_type, n.sentiment,
+                   t.confidence AS link_confidence,
+                   t.method AS link_method,
+                   t.relevance AS relevance,
+                   t.direction AS direction,
+                   (SELECT count(*) FROM news_tickers t2
+                     WHERE t2.article_id = a.id) AS ticker_count
+            FROM signals s
+            JOIN news_articles a ON a.id = s.article_id
+            JOIN news_analysis n ON n.article_id = a.id
+            JOIN news_tickers t
+              ON t.article_id = a.id AND t.ticker = s.ticker
+            LEFT JOIN news_sources src ON src.id = a.source_id
+            WHERE (%s::timestamptz IS NULL OR s.created_at >= %s::timestamptz)
+              AND (%s OR s.validated)
+            ORDER BY s.created_at DESC
             LIMIT %s
             """,
             (since, since, include_unvalidated, limit),
         )
+        from ..news.link import aliases_for_tickers, link_is_valid
+
+        aliases = aliases_for_tickers(
+            conn, {str(row.get("ticker") or "") for row in rows}
+        )
+        rows = [
+            row
+            for row in rows
+            if link_is_valid(
+                f"{row.get('title') or ''} {row.get('summary') or ''}",
+                str(row.get("ticker") or ""),
+                row.get("link_method"),
+                aliases.get(str(row.get("ticker") or "")),
+            )
+        ]
     return {"signals": rows}
 
 

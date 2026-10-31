@@ -1,0 +1,2 @@
+ALTER TABLE news_reactions ADD COLUMN IF NOT EXISTS ret_4h REAL;
+ALTER TABLE news_reactions ADD COLUMN IF NOT EXISTS abnormal_4h REAL;

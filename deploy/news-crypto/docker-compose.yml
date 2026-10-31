@@ -1,0 +1,46 @@
+name: news-crypto
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-news_crypto}
+      POSTGRES_USER: ${POSTGRES_USER:-news_crypto}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-news_crypto}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-news_crypto} -d ${POSTGRES_DB:-news_crypto}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: .
+    env_file: .env
+    ports:
+      - "172.17.0.1:8002:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["python", "-m", "trading_news.worker"]
+    env_file: .env
+    environment:
+      HTTP_PROXY: "http://172.19.0.1:1080"
+      HTTPS_PROXY: "http://172.19.0.1:1080"
+      ALL_PROXY: "http://172.19.0.1:1080"
+      NO_PROXY: "localhost,127.0.0.1,postgres,news-crypto-postgres,news-crypto-api,172.19.0.0/16"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -28,17 +28,18 @@ def _sector_paper_tick() -> None:
 
 def build_scheduler() -> BlockingScheduler:
     scheduler = BlockingScheduler(timezone=settings.tz)
-    scheduler.add_job(
-        sync_reference,
-        CronTrigger(
-            hour=settings.reference_cron_hour,
-            minute=settings.reference_cron_minute,
-            timezone=settings.tz,
-        ),
-        id="reference",
-        max_instances=1,
-        coalesce=True,
-    )
+    if settings.news_profile != "crypto":
+        scheduler.add_job(
+            sync_reference,
+            CronTrigger(
+                hour=settings.reference_cron_hour,
+                minute=settings.reference_cron_minute,
+                timezone=settings.tz,
+            ),
+            id="reference",
+            max_instances=1,
+            coalesce=True,
+        )
     scheduler.add_job(
         ingest_all,
         IntervalTrigger(seconds=settings.news_interval_sec, timezone=settings.tz),
@@ -46,13 +47,14 @@ def build_scheduler() -> BlockingScheduler:
         max_instances=1,
         coalesce=True,
     )
-    scheduler.add_job(
-        ingest_telegram,
-        IntervalTrigger(minutes=10, timezone=settings.tz),
-        id="telegram",
-        max_instances=1,
-        coalesce=True,
-    )
+    if settings.news_profile != "crypto":
+        scheduler.add_job(
+            ingest_telegram,
+            IntervalTrigger(minutes=10, timezone=settings.tz),
+            id="telegram",
+            max_instances=1,
+            coalesce=True,
+        )
     scheduler.add_job(
         classify_pending,
         IntervalTrigger(minutes=5, timezone=settings.tz),
@@ -60,11 +62,12 @@ def build_scheduler() -> BlockingScheduler:
         max_instances=1,
         coalesce=True,
     )
-    scheduler.add_job(
-        _sector_paper_tick,
-        CronTrigger(hour=8, minute=0, timezone=settings.tz),
-        id="sector-paper",
-        max_instances=1,
-        coalesce=True,
-    )
+    if settings.news_profile != "crypto":
+        scheduler.add_job(
+            _sector_paper_tick,
+            CronTrigger(hour=8, minute=0, timezone=settings.tz),
+            id="sector-paper",
+            max_instances=1,
+            coalesce=True,
+        )
     return scheduler

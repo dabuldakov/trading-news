@@ -52,6 +52,8 @@ DOMAIN_SOURCES: dict[str, tuple[str, float]] = {
     "smart-lab.ru": ("smartlab", 0.4),
     "finam.ru": ("finam", 0.5),
     "bcs-express.ru": ("bcsexpress", 0.6),
+    "forbes.ru": ("forbes", 0.75),
+    "bfm.ru": ("bfm", 0.65),
 }
 
 

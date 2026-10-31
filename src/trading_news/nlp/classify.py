@@ -212,7 +212,9 @@ def reclassify_all(limit: int = 200000) -> int:
             conn.execute(
                 """
                 UPDATE news_analysis
-                SET sentiment = %s, score = %s, event_type = %s,
+                SET sentiment = %s, score = %s,
+                    event_type = CASE WHEN event_model IS NULL
+                                      THEN %s ELSE event_type END,
                     materiality = %s, surprise = %s, model = %s
                 WHERE article_id = %s
                 """,
