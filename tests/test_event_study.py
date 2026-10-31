@@ -48,7 +48,9 @@ def test_reaction_positive_day() -> None:
     ]
     result = _reaction(bars, bars, datetime(2026, 1, 3))
     assert result is not None
-    assert result["t0"] == datetime(2026, 1, 3)
+    assert result["t0"] == datetime(
+        2026, 1, 3, tzinfo=ZoneInfo("Europe/Moscow")
+    )
     assert result["ret_1d"] == pytest.approx(0.05)
     assert result["ret_3d"] == pytest.approx(0.10)
     assert result["mfe"] == pytest.approx(0.10)

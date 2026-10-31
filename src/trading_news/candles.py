@@ -75,6 +75,25 @@ def load(
     return [_from_db_row(row) for row in rows]
 
 
+def load_latest(
+    ticker: str,
+    timeframe: str,
+    limit: int,
+) -> list[dict]:
+    with pool().connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT ts, open, high, low, close, volume, value
+            FROM market_candles
+            WHERE profile = %s AND ticker = %s AND timeframe = %s
+            ORDER BY ts DESC
+            LIMIT %s
+            """,
+            (_profile(), ticker, timeframe, limit),
+        ).fetchall()
+    return [_from_db_row(row) for row in reversed(rows)]
+
+
 def save(
     ticker: str,
     timeframe: str,
@@ -186,28 +205,12 @@ def latest(
     max_age: timedelta | None = None,
 ) -> list[dict]:
     """Return latest candles, fetching the full window only when stale/short."""
-    with pool().connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT ts, open, high, low, close, volume, value
-            FROM market_candles
-            WHERE profile = %s AND ticker = %s AND timeframe = %s
-            ORDER BY ts DESC
-            LIMIT %s
-            """,
-            (_profile(), ticker, timeframe, limit),
-        ).fetchall()
-    cached = [_from_db_row(row) for row in reversed(rows)]
+    cached = load_latest(ticker, timeframe, limit)
     fresh = bool(cached) and (
         max_age is None
         or datetime.now(UTC) - max(row["ts"] for row in cached) <= max_age
     )
     if len(cached) < limit or not fresh:
         save(ticker, timeframe, fetcher(limit), source=source)
-        cached = load(
-            ticker,
-            timeframe,
-            datetime.fromtimestamp(0, tz=UTC),
-            datetime.now(UTC) + timedelta(days=1),
-        )[-limit:]
+        cached = load_latest(ticker, timeframe, limit)
     return cached

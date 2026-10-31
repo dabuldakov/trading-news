@@ -220,8 +220,11 @@ def _reaction(bars: list[dict], market: list[dict], published_at: datetime):
         else None
     )
 
+    t0 = bars[idx]["begin"]
+    if t0.tzinfo is None:
+        t0 = t0.replace(tzinfo=ZoneInfo("Europe/Moscow"))
     return {
-        "t0": bars[idx]["begin"],
+        "t0": t0,
         "ret_1d": returns[1],
         "ret_3d": returns[3],
         "ret_5d": returns[5],
