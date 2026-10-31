@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 
 from ..config import settings
 from ..db import pool
+from ..status import mark_stage
 from .ingest import article_hash
 
 logger = logging.getLogger(__name__)
@@ -153,6 +154,10 @@ def ingest_telegram() -> dict:
     from .link import link_pending
 
     linked = link_pending(limit=2000)
+    try:
+        mark_stage("ingest", "ok", f"telegram inserted={inserted} linked={linked}")
+    except Exception:  # noqa: BLE001
+        pass
     return {"inserted": inserted, "linked": linked}
 
 

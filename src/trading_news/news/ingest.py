@@ -9,6 +9,7 @@ import httpx
 from dateutil import parser as date_parser
 
 from ..db import pool
+from ..status import mark_stage
 from .link import link_pending
 from .sources import SOURCES
 
@@ -158,6 +159,10 @@ def ingest_all() -> dict:
             except Exception as exc:  # noqa: BLE001 - one feed must not break the loop
                 logger.warning("news %s failed: %s", source["name"], exc)
     linked = link_pending()
+    try:
+        mark_stage("ingest", "ok", f"rss inserted={total} linked={linked}")
+    except Exception:  # noqa: BLE001
+        pass
     return {"inserted": total, "skipped": dropped, "linked": linked}
 
 

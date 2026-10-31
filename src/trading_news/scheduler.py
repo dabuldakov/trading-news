@@ -47,14 +47,13 @@ def build_scheduler() -> BlockingScheduler:
         max_instances=1,
         coalesce=True,
     )
-    if settings.news_profile != "crypto":
-        scheduler.add_job(
-            ingest_telegram,
-            IntervalTrigger(minutes=10, timezone=settings.tz),
-            id="telegram",
-            max_instances=1,
-            coalesce=True,
-        )
+    scheduler.add_job(
+        ingest_telegram,
+        IntervalTrigger(minutes=10, timezone=settings.tz),
+        id="telegram",
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.add_job(
         classify_pending,
         IntervalTrigger(minutes=5, timezone=settings.tz),

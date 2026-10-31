@@ -249,7 +249,7 @@ def test_candles_paginates_index_endpoint() -> None:
         ]
     )
 
-    bars = _candles("IMOEX", "SNDX", "2026-01-01", "2027-01-01", market="index")
+    bars = _candles("IMOEX", "SNDX", "2026-01-01", "2028-01-01", market="index")
 
     assert route.call_count == 2
     assert route.calls[0].request.url.params["start"] == "0"

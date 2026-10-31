@@ -27,7 +27,8 @@ def _clean() -> None:
             TRUNCATE news_articles, news_sources, aliases, instruments,
                      companies, sync_runs, news_analysis, signals,
                      event_markers, signal_watermark, sector_returns,
-                     sector_paper_trades, gdelt_documents
+                     sector_paper_trades, gdelt_documents, market_candles,
+                     news_status
             RESTART IDENTITY CASCADE
             """
         )

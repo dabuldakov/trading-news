@@ -26,6 +26,7 @@ dependencies = [
 dev = [
   "pytest>=8",
   "pytest-asyncio>=0.24",
+  "pytest-cov>=5",
   "respx>=0.21",
   "ruff>=0.6",
 ]
@@ -52,3 +53,11 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+
+[tool.coverage.run]
+source = ["trading_news"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

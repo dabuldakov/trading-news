@@ -148,6 +148,7 @@ def snapshot() -> dict:
     ) = row
 
     last_signals = stages.get("signals", {}).get("finished_at") or _iso(watermark)
+    last_ingest_marker = stages.get("ingest", {}).get("finished_at") or _iso(last_ingest)
     errors = [
         {"stage": stage, "detail": item.get("detail") or ""}
         for stage, item in stages.items()
@@ -185,7 +186,7 @@ def snapshot() -> dict:
             "active_24h": int(sources_active),
         },
         "pipeline": {
-            "last_ingest": _iso(last_ingest),
+            "last_ingest": last_ingest_marker,
             "last_llm": _iso(last_llm),
             "last_reactions": stages.get("reactions", {}).get("finished_at"),
             "last_markers": stages.get("markers", {}).get("finished_at") or _iso(last_markers),

@@ -90,6 +90,20 @@ def test_signals_hide_unvalidated_by_default(client: TestClient) -> None:
             RETURNING id
             """
         ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO news_analysis (article_id, event_type) VALUES (%s, 'dividend')",
+            (article,),
+        )
+        conn.execute(
+            "INSERT INTO aliases (company_id, alias, kind) "
+            "VALUES (%s, 'Сбербанк', 'short_name')",
+            (company,),
+        )
+        conn.execute(
+            "INSERT INTO news_tickers (article_id, ticker, confidence, method) "
+            "VALUES (%s, 'SBER', 0.95, 'exact')",
+            (article,),
+        )
         for side, validated in (("buy", True), ("sell", False)):
             conn.execute(
                 """

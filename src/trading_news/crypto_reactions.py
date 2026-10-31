@@ -10,11 +10,12 @@ import bisect
 import json
 import logging
 import time
-from datetime import UTC
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
 
+from .candles import latest as latest_candles
 from .db import pool
 from .status import mark_stage
 
@@ -23,7 +24,9 @@ BASE = "https://www.okx.com/api/v5/market/candles"
 BARS = {"5m": "5m", "1h": "1H", "4h": "4H", "1d": "1D"}
 
 
-def _candles(client: httpx.Client, symbol: str, bar: str, limit: int) -> list[tuple[int, float]]:
+def _fetch_candles(
+    client: httpx.Client, symbol: str, bar: str, limit: int
+) -> list[tuple[int, float]]:
     inst = symbol.replace(":", "/").replace("/", "-")
     r = client.get(BASE, params={"instId": inst, "bar": BARS[bar], "limit": limit})
     r.raise_for_status()
@@ -38,6 +41,33 @@ def _candles(client: httpx.Client, symbol: str, bar: str, limit: int) -> list[tu
     return out
 
 
+_CACHE_AGE = {
+    "5m": timedelta(minutes=10),
+    "1h": timedelta(hours=3),
+    "4h": timedelta(hours=12),
+    "1d": timedelta(days=3),
+}
+
+
+def _candles(
+    client: httpx.Client, symbol: str, bar: str, limit: int
+) -> list[tuple[int, float]]:
+    rows = latest_candles(
+        symbol,
+        bar,
+        limit,
+        lambda n: [
+            {"ts": ts, "close": close}
+            for ts, close in _fetch_candles(client, symbol, bar, n)
+        ],
+        source="okx",
+        max_age=_CACHE_AGE.get(bar),
+    )
+    return [
+        (int(row["ts"].timestamp() * 1000), float(row["close"])) for row in rows
+    ]
+
+
 def _ret_at(candles: list[tuple[int, float]], ts: int, step: int) -> float | None:
     if not candles:
         return None
@@ -47,19 +77,23 @@ def _ret_at(candles: list[tuple[int, float]], ts: int, step: int) -> float | Non
     return candles[idx + step][1] / candles[idx][1] - 1
 
 
-def run(limit: int = 1000) -> dict:
+def run(limit: int = 1000, *, rebuild: bool = False) -> dict:
     with pool().connection() as conn:
-        rows = conn.execute(
-            """
+        query = """
             SELECT a.id, a.published_at, t.ticker
             FROM news_articles a
             JOIN news_tickers t ON t.article_id = a.id
             WHERE t.relevance >= 1.0
-            ORDER BY a.published_at DESC
-            LIMIT %s
-            """,
-            (limit,),
-        ).fetchall()
+        """
+        if not rebuild:
+            query += """
+              AND NOT EXISTS (
+                  SELECT 1 FROM news_reactions r
+                  WHERE r.article_id = a.id AND r.ticker = t.ticker
+              )
+            """
+        query += " ORDER BY a.published_at DESC LIMIT %s"
+        rows = conn.execute(query, (limit,)).fetchall()
     cache: dict[tuple[str, str], list[tuple[int, float]]] = {}
     built = 0
     with httpx.Client(timeout=20, trust_env=True, headers={"User-Agent": "trading-news-crypto/0.1"}) as client:
@@ -112,8 +146,9 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=1000)
+    parser.add_argument("--rebuild", action="store_true")
     args = parser.parse_args()
-    print(run(args.limit))
+    print(run(args.limit, rebuild=args.rebuild))
 
 
 if __name__ == "__main__":

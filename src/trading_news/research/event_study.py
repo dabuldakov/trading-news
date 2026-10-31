@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from ..config import settings
+from ..candles import ensure as ensure_candles
 from ..db import pool
 from ..status import mark_stage
 from .stats import marker_key, sentiment_label, source_key
@@ -47,7 +48,7 @@ def _profile_min_edge() -> float:
     return PROFILE_MIN_EDGE.get(settings.news_profile, 0.001)
 
 
-def _candles(
+def _fetch_candles(
     secid: str,
     board: str,
     start: str,
@@ -103,6 +104,50 @@ def _candles(
                 break
             offset += len(batch)
     return [by_day[key] for key in sorted(by_day)]
+
+
+def _candles(
+    secid: str,
+    board: str,
+    start: str,
+    end: str,
+    *,
+    market: str = "shares",
+    interval: int = 24,
+) -> list[dict]:
+    """Read the persistent daily cache and fetch only missing ranges."""
+    start_dt = datetime.fromisoformat(start)
+    end_dt = datetime.fromisoformat(end)
+    timeframe = "1d" if interval == 24 else f"{interval}m"
+    rows = ensure_candles(
+        secid,
+        timeframe,
+        start_dt,
+        end_dt,
+        lambda begin, finish: _fetch_candles(
+            secid,
+            board,
+            begin.date().isoformat(),
+            finish.date().isoformat(),
+            market=market,
+            interval=interval,
+        ),
+        source="moex_iss",
+        overlap=timedelta(days=3),
+    )
+    msk = ZoneInfo("Europe/Moscow")
+    return [
+        {
+            "begin": row["ts"].astimezone(msk).replace(tzinfo=None),
+            "open": row["open"],
+            "high": row["high"],
+            "low": row["low"],
+            "close": row["close"],
+            "volume": row["volume"],
+            "value": row["value"],
+        }
+        for row in rows
+    ]
 
 
 def _market(start: str, end: str) -> list[dict]:
@@ -195,8 +240,15 @@ def build_reactions(
         JOIN news_tickers t ON t.article_id = a.id
         JOIN instruments i ON i.ticker = t.ticker
         WHERE a.published_at >= now() - (%s || ' days')::interval
-        ORDER BY a.published_at DESC
     """
+    if not rebuild:
+        query += """
+          AND NOT EXISTS (
+              SELECT 1 FROM news_reactions r
+              WHERE r.article_id = a.id AND r.ticker = t.ticker
+          )
+        """
+    query += " ORDER BY a.published_at DESC"
     params: list = [days]
     if limit is not None:
         query += " LIMIT %s"
