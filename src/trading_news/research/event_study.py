@@ -41,11 +41,11 @@ INTRADAY_DAYS = 120
 
 
 def _profile_cost() -> float:
-    return PROFILE_COST.get(settings.news_profile, COST)
+    return PROFILE_COST.get(getattr(settings, "news_profile", "ru"), COST)
 
 
 def _profile_min_edge() -> float:
-    return PROFILE_MIN_EDGE.get(settings.news_profile, 0.001)
+    return PROFILE_MIN_EDGE.get(getattr(settings, "news_profile", "ru"), 0.001)
 
 
 def _fetch_candles(
