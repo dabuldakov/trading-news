@@ -13,4 +13,6 @@ export DATABASE_URL="postgresql://news:news@127.0.0.1:55432/news_test"
 export SERVICE_KEY="test-key"
 export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
 
-exec .venv/bin/python -m pytest --cov=trading_news --cov-report=term "$@"
+set +e
+.venv/bin/python -m pytest --cov=trading_news --cov-report=term "$@"
+exit $?
