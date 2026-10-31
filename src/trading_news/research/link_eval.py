@@ -3,6 +3,7 @@
 Labels are manual: 1 = company is the subject/important mention, 0 = false link.
 Run after relevance_llm predictions to compare rules vs LLM gate.
 """
+
 from __future__ import annotations
 
 import json

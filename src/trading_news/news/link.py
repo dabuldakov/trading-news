@@ -13,12 +13,35 @@ _WORD_AFTER = r"(?![0-9a-zа-яё_])"
 _RU_CASE = r"(?:а|я|у|ю|ом|ем|е|ы|и|ой|ей)?"
 _CASE_SENSITIVE_ALIASES = {"самолет", "магнит", "полюс"}
 _AVIATION_CONTEXT = {
-    "рейс", "рейса", "рейсы", "борт", "борта", "аэропорт", "аэропорта",
-    "вылет", "вылета", "прилет", "flight", "авиакомпан", "aviation",
+    "рейс",
+    "рейса",
+    "рейсы",
+    "борт",
+    "борта",
+    "аэропорт",
+    "аэропорта",
+    "вылет",
+    "вылета",
+    "прилет",
+    "flight",
+    "авиакомпан",
+    "aviation",
 }
 _COMPANY_CONTEXT = {
-    "гк", "пао", "акци", "выручк", "дивиденд", "застройщик", "девелопер",
-    "мсфо", "отчет", "прибыл", "квартал", "жил", "новострой", "капитализац",
+    "гк",
+    "пао",
+    "акци",
+    "выручк",
+    "дивиденд",
+    "застройщик",
+    "девелопер",
+    "мсфо",
+    "отчет",
+    "прибыл",
+    "квартал",
+    "жил",
+    "новострой",
+    "капитализац",
 }
 
 
@@ -41,16 +64,12 @@ def _alias_pattern(alias: str) -> re.Pattern[str]:
     normalized = _norm(alias)
     # Русские названия в новостях часто стоят в косвенном падеже.
     suffix = _RU_CASE if re.search(r"[а-я]$", normalized) else ""
-    return re.compile(
-        rf"{_WORD_BEFORE}{re.escape(normalized)}{suffix}{_WORD_AFTER}"
-    )
+    return re.compile(rf"{_WORD_BEFORE}{re.escape(normalized)}{suffix}{_WORD_AFTER}")
 
 
 @lru_cache(maxsize=8192)
 def _ticker_pattern(alias: str) -> re.Pattern[str]:
-    return re.compile(
-        rf"(?<![A-Za-z0-9_]){re.escape(alias.upper())}(?![A-Za-z0-9_])"
-    )
+    return re.compile(rf"(?<![A-Za-z0-9_]){re.escape(alias.upper())}(?![A-Za-z0-9_])")
 
 
 def _alias_hit(text: str, alias: str) -> bool:
@@ -101,24 +120,47 @@ GENERIC = {
 }
 
 
-
 SECTOR_KEYWORDS = {
     "oil": {
-        "oil", "brent", "wti", "crude", "opec",
-        "нефть", "нефти", "нефтью", "нефтяной", "нефтяная", "нефтяные",
+        "oil",
+        "brent",
+        "wti",
+        "crude",
+        "opec",
+        "нефть",
+        "нефти",
+        "нефтью",
+        "нефтяной",
+        "нефтяная",
+        "нефтяные",
     },
     "gas": {"gas", "lng", "газ", "газа", "газовый", "газовая", "газовые"},
     "gold": {"gold", "золото", "золота", "золотой", "золотая"},
     "steel": {
-        "steel", "сталь", "стали", "стальной", "стальная", "стальные",
-        "чугун", "прокат",
+        "steel",
+        "сталь",
+        "стали",
+        "стальной",
+        "стальная",
+        "стальные",
+        "чугун",
+        "прокат",
     },
     "nickel": {"nickel", "никель", "никеля"},
     "copper": {"copper", "медь", "меди", "медный"},
     "aluminium": {"aluminium", "aluminum", "алюминий", "алюминия"},
     "rates": {
-        "fed", "fomc", "ecb", "rate hike", "rate cut",
-        "ставка", "ставки", "ставок", "ставке", "ставку", "ставкой",
+        "fed",
+        "fomc",
+        "ecb",
+        "rate hike",
+        "rate cut",
+        "ставка",
+        "ставки",
+        "ставок",
+        "ставке",
+        "ставку",
+        "ставкой",
     },
 }
 
@@ -301,6 +343,7 @@ def link_pending(limit: int = 5000, min_similarity: float = 0.55) -> int:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     print(link_pending())
+
 
 def _alias_map(conn) -> dict[str, list[tuple[str, str]]]:
     rows = conn.execute(

@@ -94,9 +94,7 @@ def _by_day(records: list[dict], field: str) -> dict:
     return {day: mean(items) for day, items in values.items()}
 
 
-def _bucket_stats(
-    records: list[dict], field: str, *, demean: bool
-) -> dict[str, dict]:
+def _bucket_stats(records: list[dict], field: str, *, demean: bool) -> dict[str, dict]:
     day_mean = _by_day(records, field) if demean else {}
     groups: dict[str, list[float]] = defaultdict(list)
     for record in records:
@@ -142,9 +140,7 @@ def analyze(records: list[dict]) -> dict:
             "demeaned": _bucket_stats(records, "post4", demean=True),
         },
     }
-    gaps: dict[str, dict[str, list[float]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
+    gaps: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     for record in records:
         value = record.get("post2")
         gb = gap_bucket(record.get("gap"))

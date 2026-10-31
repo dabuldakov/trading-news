@@ -3,15 +3,14 @@
 Stored in the isolated crypto-news DB.  Horizons are 5m, 1h, 4h and 1d;
 abnormal returns are measured versus BTC.
 """
+
 from __future__ import annotations
 
 import argparse
 import bisect
-import json
 import logging
 import time
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from datetime import timedelta
 
 import httpx
 
@@ -63,9 +62,7 @@ def _candles(
         source="okx",
         max_age=_CACHE_AGE.get(bar),
     )
-    return [
-        (int(row["ts"].timestamp() * 1000), float(row["close"])) for row in rows
-    ]
+    return [(int(row["ts"].timestamp() * 1000), float(row["close"])) for row in rows]
 
 
 def _ret_at(candles: list[tuple[int, float]], ts: int, step: int) -> float | None:
@@ -96,7 +93,9 @@ def run(limit: int = 1000, *, rebuild: bool = False) -> dict:
         rows = conn.execute(query, (limit,)).fetchall()
     cache: dict[tuple[str, str], list[tuple[int, float]]] = {}
     built = 0
-    with httpx.Client(timeout=20, trust_env=True, headers={"User-Agent": "trading-news-crypto/0.1"}) as client:
+    with httpx.Client(
+        timeout=20, trust_env=True, headers={"User-Agent": "trading-news-crypto/0.1"}
+    ) as client:
         btc = {bar: _candles(client, "BTC:USDT", bar, 300) for bar in BARS}
         for article_id, published, ticker in rows:
             ts = int(published.timestamp() * 1000)
@@ -116,7 +115,11 @@ def run(limit: int = 1000, *, rebuild: bool = False) -> dict:
             btc1d = _ret_at(btc["1d"], ts, 1)
             btc4h = _ret_at(btc["4h"], ts, 1)
             abnormal_1d = values["1d"] - btc1d if btc1d is not None else None
-            abnormal_4h = values["4h"] - btc4h if (values["4h"] is not None and btc4h is not None) else None
+            abnormal_4h = (
+                values["4h"] - btc4h
+                if (values["4h"] is not None and btc4h is not None)
+                else None
+            )
             with pool().connection() as conn:
                 conn.execute(
                     """
@@ -130,8 +133,18 @@ def run(limit: int = 1000, *, rebuild: bool = False) -> dict:
                         ret_1d=EXCLUDED.ret_1d, abnormal_ret=EXCLUDED.abnormal_ret,
                         abnormal_4h=EXCLUDED.abnormal_4h, costs=EXCLUDED.costs
                     """,
-                    (article_id, ticker, published, values["5m"], values["1h"],
-                     values["4h"], values["1d"], abnormal_1d, abnormal_4h, 0.002),
+                    (
+                        article_id,
+                        ticker,
+                        published,
+                        values["5m"],
+                        values["1h"],
+                        values["4h"],
+                        values["1d"],
+                        abnormal_1d,
+                        abnormal_4h,
+                        0.002,
+                    ),
                 )
                 conn.commit()
             built += 1

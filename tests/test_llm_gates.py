@@ -49,9 +49,12 @@ def test_direction_parse_and_apply() -> None:
         fh.write(json.dumps({"id": article, "scores": {"SBER": -0.4}}) + "\n")
     assert direction_llm.apply_predictions(path) == 1
     with pool().connection() as conn:
-        assert conn.execute(
-            "SELECT direction FROM news_tickers WHERE article_id=%s", (article,)
-        ).fetchone()[0] == -0.4
+        assert (
+            conn.execute(
+                "SELECT direction FROM news_tickers WHERE article_id=%s", (article,)
+            ).fetchone()[0]
+            == -0.4
+        )
 
 
 def test_relevance_parse_and_apply() -> None:
@@ -66,6 +69,9 @@ def test_relevance_parse_and_apply() -> None:
         fh.write(json.dumps({"id": article, "scores": {"SBER": 1.0}}) + "\n")
     assert relevance_llm.apply_predictions(path) >= 1
     with pool().connection() as conn:
-        assert conn.execute(
-            "SELECT relevance FROM news_tickers WHERE article_id=%s", (article,)
-        ).fetchone()[0] == 1.0
+        assert (
+            conn.execute(
+                "SELECT relevance FROM news_tickers WHERE article_id=%s", (article,)
+            ).fetchone()[0]
+            == 1.0
+        )

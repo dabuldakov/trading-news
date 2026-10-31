@@ -22,7 +22,9 @@ def test_wayback_backfill(monkeypatch) -> None:
             ],
         )
     )
-    respx.get("https://web.archive.org/web/20251005153120id_/https://feed.test/rss").mock(
+    respx.get(
+        "https://web.archive.org/web/20251005153120id_/https://feed.test/rss"
+    ).mock(
         return_value=httpx.Response(
             200,
             content=(
@@ -40,7 +42,6 @@ def test_wayback_backfill(monkeypatch) -> None:
 
 @respx.mock
 def test_gdelt_backfill(monkeypatch) -> None:
-    from datetime import datetime
 
     from trading_news.db import pool
 

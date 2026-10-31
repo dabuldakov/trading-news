@@ -63,6 +63,8 @@ def migrate() -> list[str]:
                     )
                 applied.append(path.name)
         finally:
-            conn.execute("SELECT pg_advisory_unlock(hashtext('trading_news_migrations'))")
+            conn.execute(
+                "SELECT pg_advisory_unlock(hashtext('trading_news_migrations'))"
+            )
             conn.commit()
     return applied

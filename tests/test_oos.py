@@ -453,9 +453,7 @@ def test_event_study_uses_intraday_column() -> None:
             published=datetime(2026, 1, 5),
             abnormal_ret=0.02,
         )
-        conn.execute(
-            "UPDATE news_reactions SET ret_1m = 0.001, ret_1h = 0.003"
-        )
+        conn.execute("UPDATE news_reactions SET ret_1m = 0.001, ret_1h = 0.003")
         conn.commit()
 
     result = event_study(intraday="1m")

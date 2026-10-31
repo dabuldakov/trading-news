@@ -142,9 +142,7 @@ def event_study(
         adjusted = float(value)
         if demean_by_sector_day:
             reference = (
-                sector_day_mean.get((published.date(), sector))
-                if sector
-                else None
+                sector_day_mean.get((published.date(), sector)) if sector else None
             )
             if reference is None:
                 reference = day_mean[published.date()]
@@ -184,18 +182,11 @@ def event_study(
 
 def _print_study(result: dict) -> None:
     window = f"{result['start'] or 'start'}..{result['end'] or 'now'}"
-    mode = (
-        f"demeaned-by-{result['demeaned']}"
-        if result.get("demeaned")
-        else "raw"
-    )
+    mode = f"demeaned-by-{result['demeaned']}" if result.get("demeaned") else "raw"
     horizon_label = result["horizon"]
     if isinstance(horizon_label, int):
         horizon_label = f"{horizon_label}d"
-    print(
-        f"EVENT STUDY h={horizon_label} window={window} "
-        f"n={result['n']} ({mode})"
-    )
+    print(f"EVENT STUDY h={horizon_label} window={window} n={result['n']} ({mode})")
     for key, st in sorted(
         result["groups"].items(), key=lambda kv: kv[1]["n"], reverse=True
     ):
@@ -326,9 +317,7 @@ def evaluate(
     overall_all = _with_ci(
         stats([row["pnl"] for row in all_pairs]), all_pairs, "article_id"
     )
-    overall = _with_ci(
-        stats([row["pnl"] for row in signals]), signals, "article_id"
-    )
+    overall = _with_ci(stats([row["pnl"] for row in signals]), signals, "article_id")
 
     by_marker_all = _group_stats(all_pairs, "marker")
     by_group_all = _group_stats(all_pairs, "group")
@@ -401,9 +390,7 @@ def _print(summary: dict, *, top: int = 10) -> None:
     for key, st in sorted(
         summary["by_source_all"].items(), key=lambda kv: kv[1]["n"], reverse=True
     )[:top]:
-        print(
-            f"  {key:<16} n={st['n']:<4} {st['mean'] * 100:+.3f}% (t {st['t']:+.1f})"
-        )
+        print(f"  {key:<16} n={st['n']:<4} {st['mean'] * 100:+.3f}% (t {st['t']:+.1f})")
     sectors = sorted(
         summary["by_sector_all"].items(), key=lambda kv: kv[1]["n"], reverse=True
     )[:top]
@@ -460,9 +447,7 @@ def portfolio_backtest(
         only_group=only_group,
         require_abnormal=require_abnormal,
     )
-    trades = [
-        row for row in summary["signals_rows"] if long_short or row["side"] > 0
-    ]
+    trades = [row for row in summary["signals_rows"] if long_short or row["side"] > 0]
     trades.sort(key=lambda row: row["published"])
     capital = float(capital)
     per_trade_pct = max(0.0, float(per_trade_pct))
@@ -574,17 +559,14 @@ def walk_forward(
         folds.append(summary)
         pooled.extend(summary.pop("pairs_rows"))
         cursor = nxt
-    aggregate = _with_ci(
-        stats([row["pnl"] for row in pooled]), pooled, "article_id"
-    )
+    aggregate = _with_ci(stats([row["pnl"] for row in pooled]), pooled, "article_id")
     return {"folds": folds, "pooled": aggregate, "pairs": len(pooled)}
 
 
 def _print_walk(result: dict) -> None:
     print("WALK-FORWARD")
     print(
-        f"  {'test window':<25} {'n':>5} {'mean':>9} {'t':>6} "
-        f"{'hit':>5} {'CI95':>20}"
+        f"  {'test window':<25} {'n':>5} {'mean':>9} {'t':>6} {'hit':>5} {'CI95':>20}"
     )
     for fold in result["folds"]:
         st = fold["overall_all"]
@@ -711,9 +693,7 @@ if __name__ == "__main__":
         )
     elif args.walk_forward:
         start, end, step = args.walk_forward
-        _print_walk(
-            walk_forward(start, end, int(step), **common)
-        )
+        _print_walk(walk_forward(start, end, int(step), **common))
     else:
         _print(
             evaluate(

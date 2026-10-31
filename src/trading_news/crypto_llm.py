@@ -3,6 +3,7 @@
 This module is intentionally separate from MOEX relevance/direction.  It writes
 only to a crypto-news database (the caller supplies DATABASE_URL/profile).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,9 +17,22 @@ from .db import pool
 logger = logging.getLogger(__name__)
 MODEL = "qwen2.5-7b-instruct-4bit-v2"
 CRYPTO_EVENTS = [
-    "listing", "delisting", "hack", "exploit", "sec", "etf", "regulation",
-    "partnership", "upgrade", "halving", "funding", "bankruptcy", "lawsuit",
-    "macro", "exchange", "other",
+    "listing",
+    "delisting",
+    "hack",
+    "exploit",
+    "sec",
+    "etf",
+    "regulation",
+    "partnership",
+    "upgrade",
+    "halving",
+    "funding",
+    "bankruptcy",
+    "lawsuit",
+    "macro",
+    "exchange",
+    "other",
 ]
 
 
@@ -59,13 +73,21 @@ def export_pending(output: str, limit: int = 1000, days: int = 0) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as fh:
         for article_id, title, summary, published_at, tickers in rows:
-            fh.write(json.dumps({
-                "id": article_id,
-                "title": title,
-                "summary": _clean(summary),
-                "published_at": published_at.isoformat() if published_at else None,
-                "tickers": tickers,
-            }, ensure_ascii=False) + "\n")
+            fh.write(
+                json.dumps(
+                    {
+                        "id": article_id,
+                        "title": title,
+                        "summary": _clean(summary),
+                        "published_at": published_at.isoformat()
+                        if published_at
+                        else None,
+                        "tickers": tickers,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
     return len(rows)
 
 
@@ -77,7 +99,7 @@ def _parse(text: str, candidates: set[str]) -> dict | None:
     if start < 0 or end <= start:
         return None
     try:
-        payload = json.loads(text[start:end + 1])
+        payload = json.loads(text[start : end + 1])
     except json.JSONDecodeError:
         return None
     event_type = str(payload.get("event_type") or "other").lower()
@@ -146,9 +168,12 @@ def apply_predictions(path: str, model: str = MODEL) -> int:
                      WHERE article_id = %s AND ticker = %s
                     """,
                     (
-                        score["relevance"], score["direction"],
-                        f"llm:crypto:{model}", f"llm:crypto:{model}",
-                        article_id, ticker,
+                        score["relevance"],
+                        score["direction"],
+                        f"llm:crypto:{model}",
+                        f"llm:crypto:{model}",
+                        article_id,
+                        ticker,
                     ),
                 )
                 updated += 1

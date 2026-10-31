@@ -31,9 +31,7 @@ def test_export_and_apply_event_llm() -> None:
             """,
             (source,),
         ).fetchone()[0]
-        conn.execute(
-            "INSERT INTO news_analysis (article_id) VALUES (%s)", (article,)
-        )
+        conn.execute("INSERT INTO news_analysis (article_id) VALUES (%s)", (article,))
         conn.commit()
 
     path = "/tmp/event_pending.jsonl"
@@ -45,6 +43,10 @@ def test_export_and_apply_event_llm() -> None:
         handle.write(json.dumps(prediction) + "\n")
     assert apply_predictions(pred_path) == 1
     with pool().connection() as conn:
-        assert conn.execute(
-            "SELECT event_model FROM news_analysis WHERE article_id=%s", (article,)
-        ).fetchone()[0].startswith("llm:")
+        assert (
+            conn.execute(
+                "SELECT event_model FROM news_analysis WHERE article_id=%s", (article,)
+            )
+            .fetchone()[0]
+            .startswith("llm:")
+        )

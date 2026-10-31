@@ -122,9 +122,7 @@ def permutation_spread(
     extreme = 0
     for _ in range(n_perm):
         rng.shuffle(pooled)
-        diff = stat_mean(pooled[: len(positive)]) - stat_mean(
-            pooled[len(positive) :]
-        )
+        diff = stat_mean(pooled[: len(positive)]) - stat_mean(pooled[len(positive) :])
         if abs(diff) >= abs(observed):
             extreme += 1
     return observed, (extreme + 1) / (n_perm + 1)

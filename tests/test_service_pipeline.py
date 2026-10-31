@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime, timedelta
 
 import httpx
-import pytest
 import respx
 
-from trading_news.db import pool
 from trading_news.news import ingest, telegram, telegram_backfill
 from trading_news.news.ingest import ingest_all
 from trading_news.scheduler import build_scheduler
-
 
 RSS = b"""<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>
 <item><title>Bitcoin rises</title><link>https://example.com/1</link>
@@ -51,9 +47,7 @@ def test_ingest_all_uses_feed(monkeypatch) -> None:
 @respx.mock
 def test_telegram_ingest_and_backfill(monkeypatch) -> None:
     monkeypatch.setattr(telegram, "CHANNELS", [("testchan", "Test")])
-    respx.get("https://t.me/s/testchan").mock(
-        return_value=httpx.Response(200, text=TG)
-    )
+    respx.get("https://t.me/s/testchan").mock(return_value=httpx.Response(200, text=TG))
     result = telegram.ingest_telegram()
     assert result["inserted"] == 1
 

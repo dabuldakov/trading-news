@@ -1,4 +1,5 @@
 """Operational snapshot for the news monitor."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -141,14 +142,29 @@ def snapshot() -> dict:
         ]
 
     (
-        articles, linked, llm, reactions, markers, signals, validated,
-        today_published, today_processed, pending_llm, pending_reactions,
-        sources_enabled, sources_active, last_ingest, last_llm,
-        last_markers, latest_article,
+        articles,
+        linked,
+        llm,
+        reactions,
+        markers,
+        signals,
+        validated,
+        today_published,
+        today_processed,
+        pending_llm,
+        pending_reactions,
+        sources_enabled,
+        sources_active,
+        last_ingest,
+        last_llm,
+        last_markers,
+        latest_article,
     ) = row
 
     last_signals = stages.get("signals", {}).get("finished_at") or _iso(watermark)
-    last_ingest_marker = stages.get("ingest", {}).get("finished_at") or _iso(last_ingest)
+    last_ingest_marker = stages.get("ingest", {}).get("finished_at") or _iso(
+        last_ingest
+    )
     errors = [
         {"stage": stage, "detail": item.get("detail") or ""}
         for stage, item in stages.items()
@@ -189,7 +205,8 @@ def snapshot() -> dict:
             "last_ingest": last_ingest_marker,
             "last_llm": _iso(last_llm),
             "last_reactions": stages.get("reactions", {}).get("finished_at"),
-            "last_markers": stages.get("markers", {}).get("finished_at") or _iso(last_markers),
+            "last_markers": stages.get("markers", {}).get("finished_at")
+            or _iso(last_markers),
             "last_signals": last_signals,
             "latest_article": _iso(latest_article),
             "stages": stages,

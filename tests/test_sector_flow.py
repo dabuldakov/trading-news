@@ -80,8 +80,7 @@ def test_analyze_detects_cross_sectional_signal() -> None:
 def test_load_flow_dedups_articles_per_sector() -> None:
     with pool().connection() as conn:
         source = conn.execute(
-            "INSERT INTO news_sources (name, kind) VALUES ('rbc', 'rss') "
-            "RETURNING id"
+            "INSERT INTO news_sources (name, kind) VALUES ('rbc', 'rss') RETURNING id"
         ).fetchone()[0]
         company = conn.execute(
             "INSERT INTO companies (name, sector) "

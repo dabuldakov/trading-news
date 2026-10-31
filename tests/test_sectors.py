@@ -19,8 +19,7 @@ def test_backfill_sectors_is_idempotent() -> None:
             ("LKOH", "Лукойл", "custom"),
         ):
             company = conn.execute(
-                "INSERT INTO companies (name, sector) VALUES (%s, %s) "
-                "RETURNING id",
+                "INSERT INTO companies (name, sector) VALUES (%s, %s) RETURNING id",
                 (name, sector),
             ).fetchone()[0]
             conn.execute(

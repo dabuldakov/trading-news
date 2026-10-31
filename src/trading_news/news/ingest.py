@@ -116,9 +116,7 @@ def ingest_source(source: dict, client: httpx.Client | None = None) -> int:
             if (
                 not source.get("macro")
                 and source.get("market") not in ("external", "crypto")
-                and not is_relevant(
-                    conn, f"{item['title']} {item['summary']}"
-                )
+                and not is_relevant(conn, f"{item['title']} {item['summary']}")
             ):
                 irrelevant += 1
                 continue

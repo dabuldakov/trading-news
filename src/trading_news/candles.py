@@ -5,6 +5,7 @@ only missing ranges are fetched from the upstream source.  The cache is
 profile-scoped (``ru``/``crypto``) and deliberately separate from reactions:
 reactions can be recomputed without touching the network.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable

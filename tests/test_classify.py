@@ -4,9 +4,7 @@ from trading_news.nlp.classify import classify
 
 
 def test_classify_dividend_positive() -> None:
-    result = classify(
-        {"title": "Сбербанк выплатит рекордные дивиденды", "summary": ""}
-    )
+    result = classify({"title": "Сбербанк выплатит рекордные дивиденды", "summary": ""})
     assert result["event_type"] == "dividend"
     assert result["sentiment"] == 1
     assert result["model"] == "rules-v2"

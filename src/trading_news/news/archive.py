@@ -150,9 +150,7 @@ def parse_article(raw: bytes, url: str) -> dict | None:
     for suffix in (" — РБК", " - Ведомости", " - Коммерсантъ"):
         if title.endswith(suffix):
             title = title[: -len(suffix)].strip()
-    summary = _meta(soup, name="description") or _meta(
-        soup, prop="og:description"
-    )
+    summary = _meta(soup, name="description") or _meta(soup, prop="og:description")
     published = (
         _meta(soup, prop="article:published_time")
         or _meta(soup, name="date")
@@ -294,10 +292,7 @@ def scrape(
     failed = 0
     fetched = 0
     with ThreadPoolExecutor(max_workers=max(1, workers)) as executor:
-        futures = {
-            executor.submit(_fetch, url): (url, when)
-            for url, when in unique
-        }
+        futures = {executor.submit(_fetch, url): (url, when) for url, when in unique}
         for future in as_completed(futures):
             url, fallback = futures[future]
             fetched += 1

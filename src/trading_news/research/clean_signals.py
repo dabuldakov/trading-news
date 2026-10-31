@@ -75,15 +75,19 @@ def main() -> None:
         ).fetchall()
 
     groups: dict[tuple, list[float]] = defaultdict(list)
-    counts = {"all_rows": 0, "clean_rows": 0, "clean_articles": set(),
-              "all_articles": set()}
+    counts = {
+        "all_rows": 0,
+        "clean_rows": 0,
+        "clean_articles": set(),
+        "all_articles": set(),
+    }
     for (
         article_id,
         published_at,
         event_type,
         sentiment,
-        source,
-        ticker,
+        _source,
+        _ticker,
         confidence,
         ticker_count,
         *returns,
@@ -103,7 +107,7 @@ def main() -> None:
             counts["clean_articles"].add(article_id)
         period = "train" if published_at.year < 2026 else "test"
         mode = "clean" if clean else "all"
-        for label, field in HORIZONS.items():
+        for label, _field in HORIZONS.items():
             idx = list(HORIZONS).index(label)
             value = returns[idx]
             if value is None:
@@ -118,22 +122,37 @@ def main() -> None:
         stat = _stats(values)
         if stat["n"] < 30:
             continue
-        est = {"mode": key[0], "event_type": key[1], "horizon": key[2],
-               "period": key[3], **stat}
+        est = {
+            "mode": key[0],
+            "event_type": key[1],
+            "horizon": key[2],
+            "period": key[3],
+            **stat,
+        }
         if stat["t"] is not None:
             p = math.erfc(abs(stat["t"]) / math.sqrt(2))
             pvals.append((key, p))
         estimates.append(est)
     qmap = _bh(pvals)
     for est in estimates:
-        est["q"] = qmap.get((est["mode"], est["event_type"], est["horizon"], est["period"]))
-    estimates.sort(key=lambda x: (x["mode"], x["period"], x["event_type"], x["horizon"]))
+        est["q"] = qmap.get(
+            (est["mode"], est["event_type"], est["horizon"], est["period"])
+        )
+    estimates.sort(
+        key=lambda x: (x["mode"], x["period"], x["event_type"], x["horizon"])
+    )
     result = {
-        "filters": {"max_tickers": CLEAN_MAX_TICKERS, "min_link_confidence": CLEAN_MIN_LINK,
-                    "exclude_event_type": "other", "sentiment_zero": "skipped"},
-        "counts": {**{k: v for k, v in counts.items() if not isinstance(v, set)},
-                   "all_articles": len(counts["all_articles"]),
-                   "clean_articles": len(counts["clean_articles"])},
+        "filters": {
+            "max_tickers": CLEAN_MAX_TICKERS,
+            "min_link_confidence": CLEAN_MIN_LINK,
+            "exclude_event_type": "other",
+            "sentiment_zero": "skipped",
+        },
+        "counts": {
+            **{k: v for k, v in counts.items() if not isinstance(v, set)},
+            "all_articles": len(counts["all_articles"]),
+            "clean_articles": len(counts["clean_articles"]),
+        },
         "estimates": estimates,
     }
     with open("/tmp/clean_signals_report.json", "w") as handle:

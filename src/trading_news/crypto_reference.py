@@ -1,4 +1,5 @@
 """Minimal crypto asset reference for the isolated crypto-news profile."""
+
 from __future__ import annotations
 
 import argparse

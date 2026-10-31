@@ -21,9 +21,12 @@ def stats(values):
         return {"n": n, "mean_bp": None, "t": None, "hit": None}
     mean = sum(values) / n
     sd = math.sqrt(sum((v - mean) ** 2 for v in values) / (n - 1))
-    return {"n": n, "mean_bp": mean * 10000,
-            "t": mean / (sd / math.sqrt(n)) if sd else None,
-            "hit": sum(1 for v in values if v > 0) / n}
+    return {
+        "n": n,
+        "mean_bp": mean * 10000,
+        "t": mean / (sd / math.sqrt(n)) if sd else None,
+        "hit": sum(1 for v in values if v > 0) / n,
+    }
 
 
 def main():
@@ -40,7 +43,10 @@ def main():
             WHERE a.published_at >= '2024-01-01'
         """).fetchall()
 
-    out = {"variants": [], "filters": {"event_type": "!= other", "sentiment_zero": "skip"}}
+    out = {
+        "variants": [],
+        "filters": {"event_type": "!= other", "sentiment_zero": "skip"},
+    }
     for max_t in TICKERS:
         for min_link in LINKS:
             selected = []
@@ -50,15 +56,22 @@ def main():
                     continue
                 if float(conf or 0) < min_link:
                     continue
-                direction = 1 if (sentiment or 0) > 0 else -1 if (sentiment or 0) < 0 else 0
+                direction = (
+                    1 if (sentiment or 0) > 0 else -1 if (sentiment or 0) < 0 else 0
+                )
                 if not direction:
                     continue
                 selected.append((article_id, day, event_type, direction, rets))
             articles = {r[0] for r in selected}
-            variant = {"max_tickers": max_t, "min_link": min_link,
-                       "articles": len(articles), "rows": len(selected),
-                       "by_event": {}, "all": {}}
-            for label, idx in HORIZONS.items():
+            variant = {
+                "max_tickers": max_t,
+                "min_link": min_link,
+                "articles": len(articles),
+                "rows": len(selected),
+                "by_event": {},
+                "all": {},
+            }
+            for label, _idx in HORIZONS.items():
                 for period in PERIODS:
                     vals = []
                     by_et = defaultdict(list)
@@ -73,15 +86,20 @@ def main():
                     variant["all"][f"{label}_{period}"] = stats(vals)
                     for et, evals in by_et.items():
                         if len(evals) >= 30:
-                            variant["by_event"].setdefault(et, {})[f"{label}_{period}"] = stats(evals)
+                            variant["by_event"].setdefault(et, {})[
+                                f"{label}_{period}"
+                            ] = stats(evals)
             out["variants"].append(variant)
     # Print compact comparison.
     print("max_t link articles rows | test_1d n mean_bp t | test_5d n mean_bp t")
     for v in out["variants"]:
-        a=v["all"]["1d_test"]; b=v["all"]["5d_test"]
-        print(f"{v['max_tickers']:5d} {v['min_link']:.2f} {v['articles']:8d} {v['rows']:4d} | "
-              f"{a['n']:4d} {a['mean_bp'] or 0:+7.2f} {a['t'] or 0:+5.2f} | "
-              f"{b['n']:4d} {b['mean_bp'] or 0:+7.2f} {b['t'] or 0:+5.2f}")
+        a = v["all"]["1d_test"]
+        b = v["all"]["5d_test"]
+        print(
+            f"{v['max_tickers']:5d} {v['min_link']:.2f} {v['articles']:8d} {v['rows']:4d} | "
+            f"{a['n']:4d} {a['mean_bp'] or 0:+7.2f} {a['t'] or 0:+5.2f} | "
+            f"{b['n']:4d} {b['mean_bp'] or 0:+7.2f} {b['t'] or 0:+5.2f}"
+        )
     with open("/tmp/filter_variants.json", "w") as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
 

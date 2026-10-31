@@ -59,10 +59,7 @@ def ingest_key_rate() -> dict:
     with pool().connection() as conn:
         source_id = _source_id(conn)
         for row in rows:
-            title = (
-                f"ЦБ: ключевая ставка {row['value']:.2f}% "
-                f"(с {row['date'].date()})"
-            )
+            title = f"ЦБ: ключевая ставка {row['value']:.2f}% (с {row['date'].date()})"
             url = f"{CBR_KEY_RATE_URL}#{row['date'].date()}"
             result = conn.execute(
                 """

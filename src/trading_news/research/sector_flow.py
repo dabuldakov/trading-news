@@ -83,8 +83,7 @@ def build_sector_returns(start: str, end: str) -> int:
             logger.warning("sector candles %s: %s", ticker, exc)
     try:
         market_closes = {
-            bar["begin"].date(): bar["close"]
-            for bar in _market(fetch_start, end)
+            bar["begin"].date(): bar["close"] for bar in _market(fetch_start, end)
         }
     except Exception as exc:  # noqa: BLE001
         logger.warning("sector market: %s", exc)
@@ -193,10 +192,7 @@ def forward_records(
 ) -> list[dict]:
     days = sorted({day for (day, sector) in returns if sector != MARKET})
     index = {day: position for position, day in enumerate(days)}
-    market = {
-        day: returns.get((day, MARKET))
-        for day in days
-    }
+    market = {day: returns.get((day, MARKET)) for day in days}
     records = []
     for (day, sector), values in flow.items():
         position = index.get(day)
@@ -331,9 +327,7 @@ def analyze(records: list[dict], *, top: int = 3, cost: float = COST) -> dict:
         "ic_intensity": _ic(ic_intensity),
         "long_short": stats(long_short),
         "by_sector": {
-            sector: {
-                label: stats(values) for label, values in labels.items()
-            }
+            sector: {label: stats(values) for label, values in labels.items()}
             for sector, labels in by_sector.items()
         },
     }
@@ -353,8 +347,7 @@ def _print(result: dict, *, start: str, end: str, horizon: int) -> None:
         )
     spread = result["buckets"]["spread"]
     print(
-        f"  spread   {spread['mean'] * 100:+.3f}% p={spread['p']:.3f} "
-        f"(n={spread['n']})"
+        f"  spread   {spread['mean'] * 100:+.3f}% p={spread['p']:.3f} (n={spread['n']})"
     )
     print("  -- cross-sectional --")
     for name in ("ic_sentiment", "ic_intensity"):

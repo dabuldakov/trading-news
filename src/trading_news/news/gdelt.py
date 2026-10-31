@@ -31,9 +31,7 @@ def parse_articles(payload: dict) -> list[dict]:
             continue
         seen = str(item.get("seendate") or "")
         try:
-            published = datetime.strptime(seen, "%Y%m%dT%H%M%SZ").replace(
-                tzinfo=UTC
-            )
+            published = datetime.strptime(seen, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
         except ValueError:
             published = datetime.now(UTC)
         out.append(

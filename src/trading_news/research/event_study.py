@@ -20,8 +20,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from ..config import settings
 from ..candles import ensure as ensure_candles
+from ..config import settings
 from ..db import pool
 from ..status import mark_stage
 from .stats import marker_key, sentiment_label, source_key
@@ -96,9 +96,7 @@ def _fetch_candles(
                     "low": float(row[index["low"]]),
                     "close": float(row[index["close"]]),
                     "volume": float(row[index["volume"]]),
-                    "value": (
-                        float(row[index["value"]]) if "value" in index else 0.0
-                    ),
+                    "value": (float(row[index["value"]]) if "value" in index else 0.0),
                 }
             if len(batch) < PAGE:
                 break

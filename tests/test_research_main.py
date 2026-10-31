@@ -3,8 +3,13 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from trading_news.db import pool
-from trading_news.research import clean_signals, filter_variants, link_eval
-from trading_news.research import sector_flow, sector_paper
+from trading_news.research import (
+    clean_signals,
+    filter_variants,
+    link_eval,
+    sector_flow,
+    sector_paper,
+)
 
 
 def _seed_rows() -> None:
@@ -64,11 +69,8 @@ def test_filter_and_clean_main(monkeypatch, capsys) -> None:
 
 
 def test_sector_build_and_paper(monkeypatch) -> None:
-    from datetime import date
 
-    monkeypatch.setattr(
-        sector_flow, "_active_tickers", lambda: {"tech": ["SBER"]}
-    )
+    monkeypatch.setattr(sector_flow, "_active_tickers", lambda: {"tech": ["SBER"]})
     monkeypatch.setattr(
         sector_flow,
         "_closes",

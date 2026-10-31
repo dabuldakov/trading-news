@@ -205,9 +205,7 @@ def enrich(limit: int = 200) -> dict:
         name, credibility = _domain_source(domain)
         published = item["published"] or datetime.now(UTC)
         with pool().connection() as conn:
-            source = ArchiveSource(
-                name=name, sitemaps=(), credibility=credibility
-            )
+            source = ArchiveSource(name=name, sitemaps=(), credibility=credibility)
             source_id = _source_id(conn, source)
             row = conn.execute(
                 """

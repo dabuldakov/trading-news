@@ -23,9 +23,7 @@ CDX_API = "http://web.archive.org/cdx/search/cdx"
 SNAPSHOT = "https://web.archive.org/web/{timestamp}id_/{original}"
 
 
-def cdx_snapshots(
-    url: str, start: str, end: str, limit: int = 500
-) -> list[dict]:
+def cdx_snapshots(url: str, start: str, end: str, limit: int = 500) -> list[dict]:
     params = {
         "url": url,
         "output": "json",

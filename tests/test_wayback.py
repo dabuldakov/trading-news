@@ -13,9 +13,7 @@ def test_cdx_parse(monkeypatch) -> None:
                 ["k", "20251005153120", "https://x/rss", "200"],
                 ["k", "20251006035935", "https://x/rss", "404"],
             ]
-            return httpx.Response(
-                200, json=payload, request=httpx.Request("GET", url)
-            )
+            return httpx.Response(200, json=payload, request=httpx.Request("GET", url))
 
         def __enter__(self):
             return self

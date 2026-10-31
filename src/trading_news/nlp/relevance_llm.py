@@ -43,8 +43,10 @@ def mark_technical() -> int:
                AND (t.relevance IS NULL OR t.relevance <> 0)
                AND a.title ~* %s
             """,
-            (r"REPO risk parameters|мониторинг максимальных процентных ставок|"
-             r"мониторинг процентных ставок|изменение параметров риска",),
+            (
+                r"REPO risk parameters|мониторинг максимальных процентных ставок|"
+                r"мониторинг процентных ставок|изменение параметров риска",
+            ),
         )
         conn.commit()
         return cursor.rowcount
@@ -88,13 +90,21 @@ def export_pending(output: str, limit: int = 1000, days: int = 0) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         for article_id, title, summary, published_at, tickers in rows:
-            handle.write(json.dumps({
-                "id": article_id,
-                "title": title,
-                "summary": _clean(summary, 1600),
-                "published_at": published_at.isoformat() if published_at else None,
-                "tickers": tickers,
-            }, ensure_ascii=False) + "\n")
+            handle.write(
+                json.dumps(
+                    {
+                        "id": article_id,
+                        "title": title,
+                        "summary": _clean(summary, 1600),
+                        "published_at": published_at.isoformat()
+                        if published_at
+                        else None,
+                        "tickers": tickers,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
     return len(rows)
 
 

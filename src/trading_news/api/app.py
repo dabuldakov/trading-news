@@ -31,9 +31,7 @@ def _rows(conn, query: str, params: tuple | None = None) -> list[dict]:
     with conn.cursor() as cursor:
         cursor.execute(query, params)
         columns = [description.name for description in cursor.description]
-        return [
-            dict(zip(columns, row, strict=True)) for row in cursor.fetchall()
-        ]
+        return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
 
 @app.get("/status")

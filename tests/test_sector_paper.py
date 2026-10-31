@@ -14,8 +14,7 @@ from trading_news.research.sector_paper import (
 
 def _seed_day(conn, day: date, sentiment: float = -1.0) -> None:
     source = conn.execute(
-        "INSERT INTO news_sources (name, kind) "
-        "VALUES ('paper-rbc', 'rss') RETURNING id"
+        "INSERT INTO news_sources (name, kind) VALUES ('paper-rbc', 'rss') RETURNING id"
     ).fetchone()[0]
     company = conn.execute(
         "INSERT INTO companies (name, sector) "
@@ -75,9 +74,7 @@ def test_paper_capture_update_and_replay() -> None:
 
     assert paper_update() == 1
     with pool().connection() as conn:
-        row = conn.execute(
-            "SELECT status, excess FROM sector_paper_trades"
-        ).fetchone()
+        row = conn.execute("SELECT status, excess FROM sector_paper_trades").fetchone()
     assert row[0] == "closed"
     assert row[1] == pytest.approx(0.01)
 

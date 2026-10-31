@@ -97,8 +97,7 @@ def test_source_key_and_event_group() -> None:
 def test_build_markers_and_signals() -> None:
     with pool().connection() as conn:
         source = conn.execute(
-            "INSERT INTO news_sources (name, kind) "
-            "VALUES ('rbc', 'rss') RETURNING id"
+            "INSERT INTO news_sources (name, kind) VALUES ('rbc', 'rss') RETURNING id"
         ).fetchone()[0]
         company = conn.execute(
             "INSERT INTO companies (name) VALUES ('ПАО Сбербанк') RETURNING id"
@@ -118,8 +117,7 @@ def test_build_markers_and_signals() -> None:
                 (source, str(index)),
             ).fetchone()[0]
             conn.execute(
-                "INSERT INTO news_tickers (article_id, ticker) "
-                "VALUES (%s, 'SBER')",
+                "INSERT INTO news_tickers (article_id, ticker) VALUES (%s, 'SBER')",
                 (article,),
             )
             conn.execute(
@@ -329,8 +327,7 @@ def _seed_article(
 def test_build_reactions_uses_forward_bars_and_rebuilds() -> None:
     with pool().connection() as conn:
         source = conn.execute(
-            "INSERT INTO news_sources (name, kind) VALUES ('rbc', 'rss') "
-            "RETURNING id"
+            "INSERT INTO news_sources (name, kind) VALUES ('rbc', 'rss') RETURNING id"
         ).fetchone()[0]
         company = conn.execute(
             "INSERT INTO companies (name) VALUES ('ПАО Сбербанк') RETURNING id"
@@ -377,9 +374,9 @@ def test_build_reactions_uses_forward_bars_and_rebuilds() -> None:
             json={"candles": {"columns": CANDLE_COLUMNS, "data": rows}},
         )
 
-    respx.get(
-        url__regex=r".*/shares/boards/TQBR/securities/SBER/candles\.json"
-    ).mock(side_effect=_response)
+    respx.get(url__regex=r".*/shares/boards/TQBR/securities/SBER/candles\.json").mock(
+        side_effect=_response
+    )
     market_route = respx.get(
         url__regex=r".*/index/boards/SNDX/securities/IMOEX/candles\.json"
     ).mock(side_effect=_response)
@@ -415,8 +412,7 @@ def test_build_markers_merges_wayback_and_live_sources() -> None:
             "VALUES ('wayback:rbc', 'wayback') RETURNING id"
         ).fetchone()[0]
         live = conn.execute(
-            "INSERT INTO news_sources (name, kind) "
-            "VALUES ('rbc', 'rss') RETURNING id"
+            "INSERT INTO news_sources (name, kind) VALUES ('rbc', 'rss') RETURNING id"
         ).fetchone()[0]
         company = conn.execute(
             "INSERT INTO companies (name) VALUES ('ПАО Сбербанк') RETURNING id"
@@ -458,8 +454,7 @@ def test_build_markers_merges_wayback_and_live_sources() -> None:
 def test_build_signals_requires_significance_and_normalizes_source() -> None:
     with pool().connection() as conn:
         live = conn.execute(
-            "INSERT INTO news_sources (name, kind) "
-            "VALUES ('rbc', 'rss') RETURNING id"
+            "INSERT INTO news_sources (name, kind) VALUES ('rbc', 'rss') RETURNING id"
         ).fetchone()[0]
         company = conn.execute(
             "INSERT INTO companies (name) VALUES ('ПАО Сбербанк') RETURNING id"
@@ -492,9 +487,7 @@ def test_build_signals_requires_significance_and_normalizes_source() -> None:
         conn.commit()
     assert build_signals(min_t=2.0) == 1
     with pool().connection() as conn:
-        signal = conn.execute(
-            "SELECT side, marker_key FROM signals"
-        ).fetchone()
+        signal = conn.execute("SELECT side, marker_key FROM signals").fetchone()
     assert signal[0] == "buy"
     assert signal[1] == "dividend|pos|rbc"
 
@@ -532,8 +525,7 @@ def test_build_intraday_reactions_updates_rows() -> None:
     ) - timedelta(days=1)
     with pool().connection() as conn:
         source = conn.execute(
-            "INSERT INTO news_sources (name, kind) VALUES ('rbc', 'rss') "
-            "RETURNING id"
+            "INSERT INTO news_sources (name, kind) VALUES ('rbc', 'rss') RETURNING id"
         ).fetchone()[0]
         company = conn.execute(
             "INSERT INTO companies (name) VALUES ('ПАО Сбербанк') RETURNING id"
@@ -571,9 +563,7 @@ def test_build_intraday_reactions_updates_rows() -> None:
                 (when + timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S"),
             ]
         )
-    respx.get(
-        url__regex=r".*/shares/boards/TQBR/securities/SBER/candles\.json"
-    ).mock(
+    respx.get(url__regex=r".*/shares/boards/TQBR/securities/SBER/candles\.json").mock(
         return_value=httpx.Response(
             200,
             json={"candles": {"columns": CANDLE_COLUMNS, "data": rows}},
@@ -597,8 +587,7 @@ def test_build_signals_marks_recent_consistency_validated() -> None:
     now = datetime.now()
     with pool().connection() as conn:
         source = conn.execute(
-            "INSERT INTO news_sources (name, kind) VALUES ('rbc', 'rss') "
-            "RETURNING id"
+            "INSERT INTO news_sources (name, kind) VALUES ('rbc', 'rss') RETURNING id"
         ).fetchone()[0]
         company = conn.execute(
             "INSERT INTO companies (name) VALUES ('ПАО Сбербанк') RETURNING id"

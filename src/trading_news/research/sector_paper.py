@@ -229,12 +229,8 @@ def paper_replay(
         "total_return": equity / capital - 1.0 if capital else 0.0,
         "max_drawdown": max_drawdown,
         "final_equity": equity,
-        "by_month": {
-            key: stats(values) for key, values in by_month.items()
-        },
-        "by_sector": {
-            key: stats(values) for key, values in by_sector.items()
-        },
+        "by_month": {key: stats(values) for key, values in by_month.items()},
+        "by_sector": {key: stats(values) for key, values in by_sector.items()},
     }
 
 
@@ -267,9 +263,7 @@ if __name__ == "__main__":
     parser.add_argument("--capture", type=int, metavar="DAYS")
     parser.add_argument("--update", action="store_true")
     parser.add_argument("--report", action="store_true")
-    parser.add_argument(
-        "--replay", nargs=2, metavar=("START", "END")
-    )
+    parser.add_argument("--replay", nargs=2, metavar=("START", "END"))
     parser.add_argument("--horizon", type=int, default=1)
     args = parser.parse_args()
     if args.replay:

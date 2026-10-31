@@ -107,7 +107,15 @@ def export_pending(
             ORDER BY a.published_at DESC
             LIMIT %s
             """,
-            (days, days, reactions_only, linked_only, exclude_official, official, limit),
+            (
+                days,
+                days,
+                reactions_only,
+                linked_only,
+                exclude_official,
+                official,
+                limit,
+            ),
         ).fetchall()
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)

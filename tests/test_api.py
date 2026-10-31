@@ -120,7 +120,5 @@ def test_signals_hide_unvalidated_by_default(client: TestClient) -> None:
     assert response.status_code == 200
     assert [row["validated"] for row in response.json()["signals"]] == [True]
 
-    response = client.get(
-        "/internal/signals?include_unvalidated=true", headers=HEADERS
-    )
+    response = client.get("/internal/signals?include_unvalidated=true", headers=HEADERS)
     assert len(response.json()["signals"]) == 2

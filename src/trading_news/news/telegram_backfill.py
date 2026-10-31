@@ -5,6 +5,7 @@ with ``?before=<post_id>`` until the cutoff date, with a small delay between
 requests.  It writes through the same source/article tables and hash-based
 deduplication as the live collector.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -123,9 +124,12 @@ def main() -> None:
         headers={"User-Agent": "Mozilla/5.0 (compatible; trading-news/0.1)"},
     ) as client:
         for channel in channels:
-            print(backfill_channel(
-                client, channel, cutoff, delay=args.delay, max_pages=args.max_pages
-            ), flush=True)
+            print(
+                backfill_channel(
+                    client, channel, cutoff, delay=args.delay, max_pages=args.max_pages
+                ),
+                flush=True,
+            )
 
 
 if __name__ == "__main__":

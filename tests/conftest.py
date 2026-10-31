@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import os
 
-os.environ.setdefault(
-    "DATABASE_URL", "postgresql://news:news@127.0.0.1:5433/news"
-)
+os.environ.setdefault("DATABASE_URL", "postgresql://news:news@127.0.0.1:5433/news")
 os.environ.setdefault("SERVICE_KEY", "test-key")
 
 import pytest  # noqa: E402

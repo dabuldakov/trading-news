@@ -59,9 +59,7 @@ def test_sync_reference_upserts_instrument_company_alias() -> None:
             FROM instruments WHERE ticker = 'SBER'
             """
         ).fetchone()
-        company = conn.execute(
-            "SELECT name, inn FROM companies"
-        ).fetchone()
+        company = conn.execute("SELECT name, inn FROM companies").fetchone()
         aliases = conn.execute("SELECT count(*) FROM aliases").fetchone()[0]
         run = conn.execute(
             "SELECT status FROM sync_runs ORDER BY id DESC LIMIT 1"

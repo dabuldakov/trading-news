@@ -8,6 +8,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -32,8 +33,22 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: ruff check .
-      - run: pytest
+      - name: Lint
+        run: ruff check .
+      - name: Tests + coverage
+        run: >-
+          pytest
+          --cov=trading_news
+          --cov-report=term-missing
+          --cov-report=xml
+          --cov-fail-under=75
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-coverage
+          path: coverage.xml
+          if-no-files-found: ignore
 
   build:
     runs-on: ubuntu-latest

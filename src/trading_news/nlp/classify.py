@@ -88,9 +88,7 @@ def _weighted(text: str, lexicon: dict[str, float], polarity: int) -> float:
             if position < 0:
                 break
             prefix = text[max(0, position - 16) : position]
-            negated = any(
-                re.search(rf"\b{neg}\b", prefix) for neg in NEGATIONS
-            )
+            negated = any(re.search(rf"\b{neg}\b", prefix) for neg in NEGATIONS)
             contribution = -weight * 0.8 if negated else weight
             total += polarity * contribution
             start = position + len(word)
@@ -105,10 +103,7 @@ def _surprise(text: str, score: float) -> float:
     magnitude = min(1.0, max(values, default=0.0) / 20.0)
     if any(word in text for word in ("рекорд", "неожид", "впервые")):
         magnitude = min(1.0, magnitude + 0.3)
-    if any(
-        word in text
-        for word in ("хуже прогноз", "ниже прогноз", "слабее прогноз")
-    ):
+    if any(word in text for word in ("хуже прогноз", "ниже прогноз", "слабее прогноз")):
         magnitude = max(0.0, magnitude - 0.4)
     if "прогноз" in text and magnitude == 0:
         magnitude = 0.2

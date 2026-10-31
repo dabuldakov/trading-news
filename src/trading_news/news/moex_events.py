@@ -36,6 +36,7 @@ def fetch_dividends(ticker: str, client: httpx.Client | None = None) -> list[dic
     index = {name: i for i, name in enumerate(columns)}
     out: list[dict] = []
     for row in block.get("data") or []:
+
         def value(name: str, row=row, index=index):
             position = index.get(name)
             if position is None or position >= len(row):
@@ -99,9 +100,7 @@ def ingest_dividends(limit: int = 100) -> dict:
                 )
                 url = f"https://www.moex.com/ru/issue.aspx?code={ticker}"
                 try:
-                    published = datetime.fromisoformat(registry).replace(
-                        tzinfo=UTC
-                    )
+                    published = datetime.fromisoformat(registry).replace(tzinfo=UTC)
                 except ValueError:
                     published = datetime.now(UTC)
                 with pool().connection() as conn:
