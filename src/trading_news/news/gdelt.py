@@ -12,6 +12,7 @@ import time
 from datetime import UTC, datetime, timedelta
 
 import httpx
+import psycopg.types.json
 
 from ..db import pool
 from .ingest import article_hash
@@ -127,7 +128,7 @@ def backfill(
                         item["summary"],
                         item["published_at"],
                         item["hash"],
-                        {"domain": item["domain"]},
+                        psycopg.types.json.Jsonb({"domain": item["domain"]}),
                     ),
                 ).fetchone()
                 if row:

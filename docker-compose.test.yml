@@ -1,0 +1,19 @@
+name: trading-news-test
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: news_test
+      POSTGRES_USER: news
+      POSTGRES_PASSWORD: news
+    ports:
+      - "127.0.0.1:55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U news -d news_test"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: "no"
